@@ -1,0 +1,16 @@
+{
+	"authors": [
+		"cet"
+	],
+	"copyright": "Copyright © 2025, cet",
+	"description": ",",
+	"license": "proprietary",
+	"name": "llmd",
+	"targetType": "library",
+	"sourcePaths": [
+		"source"
+	],
+	"testSourcePaths": [
+		"source/examples"
+	]
+}
