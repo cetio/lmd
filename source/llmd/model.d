@@ -77,17 +77,10 @@ package:
 
     JSONValue message(string role, string content) => ep.message(role, content);
 
-    /// Performs basic message validation and registers the model with the endpoint if missing.
     bool sanity()
     {
         if (name !in ep.models)
             ep.models[name] = this;
-
-        foreach (msg; messages)
-        {
-            if ("role" !in msg || "content" !in msg)
-                return false;
-        }
         return true;
     }
 

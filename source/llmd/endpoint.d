@@ -42,8 +42,6 @@ interface IEndpoint
 // TODO: Completions here.
 class Endpoint(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
 {
-    /// API key used for authentication, may be empty if not required.
-    static string key;
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
 
