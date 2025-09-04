@@ -1,17 +1,29 @@
 # LLMD
 
-D client for OpenAI-style chat completions. Small, explicit, and practical, with support for many common structures and designed to seamlessly work with LMStudio for using language models locally.
+A tiny, pragmatic D client for OpenAI-style chat and text completions.
+Small, explicit, and practical — designed to be easy to read and to work seamlessly with LMStudio for running models locally.
 
-LLMD can handle:
-- High context prompts/series of messages with roles.
-- Sending and receiving messages with variant support between `Response` and `JSONValue` queries.
-- Normalizing assistant responses into choice and option sets.
-- Full option sets (`frequency_penalty`, `top_p`, etc.)
+LLMD focuses on being minimal and predictable while handling the common LLM tasks you actually need.
+
+## Features
+
+LLMD is designed to be highly extensible, supporting API keys per model and using interfaced endpoints to allow for defining new endpoints. 
 
 Supported endpoints:
-- `/v1/chat/completions`
+- OpenAI
+    - `/v1/chat/completions`
+    - `/v1/completions` (legacy)
+    - `/v1/models`
 
-Supports HTTPS/HTTP schemes from any address/port.
+---
+
+- Handles multi-message conversations with roles.
+- Sends and receives messages and normalizes assistant responses.
+- Full support for common generation options (`temperature`, `top_p`, `frequency_penalty`, etc.).
+- Designed around LMStudio and OpenAI endpoints.
+
+
+Works over HTTP and HTTPS and accepts any address/port combination.
 
 ## Usage
 
@@ -21,28 +33,26 @@ All structures are designed to mirror LLM JSON structures and be as easy as poss
 You can see a small snippet for sorting an array incredibly slowly here:
 
 ```d
-import std.conv;
-import std.traits;
-import llmd;
-
 T vibesort(T)(T arr, Model model)
     if (isDynamicArray!T || isStaticArray!T)
 {
     Response resp = model.send(
         "Sort this array and only output the array in D syntax without any code blocks or additional formatting:"~arr.to!string
     );
-    writeln(resp);
     return resp.choices[0].lines[$-1].to!T;
 }
 
 unittest
 {
     // LMStudio 127.0.0.1
-    IEndpoint ep = endpoint!("http", "127.0.0.1", 1234);
-    Model m = ep.load("text-embedding-nomic-embed-text-v1.5");
+    IEndpoint ep = openai!("http", "127.0.0.1", 1234);
+    // Load the default/first model.
+    Model m = ep.load();
     assert([2, 5, 3, 1].vibesort(m) == [1, 2, 3, 5]);
 }
 ```
+
+When LLMD becomes more stable, further usage will be documented.
 
 ## Roadmap
 
