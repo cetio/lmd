@@ -21,46 +21,26 @@ All structures are designed to mirror LLM JSON structures and be as easy as poss
 You can see a small snippet for sorting an array incredibly slowly here:
 
 ```d
+import std.conv;
+import std.traits;
+import llmd;
+
 T vibesort(T)(T arr, Model model)
     if (isDynamicArray!T || isStaticArray!T)
 {
-    return model.send(
-        "Sort this array and only output the array in the correct original syntax:"~arr.to!string
-    ).choices[0].lines[$-1].to!T;
+    Response resp = model.send(
+        "Sort this array and only output the array in D syntax without any code blocks or additional formatting:"~arr.to!string
+    );
+    writeln(resp);
+    return resp.choices[0].lines[$-1].to!T;
 }
 
 unittest
 {
     // LMStudio 127.0.0.1
-    Model model = Model(address: "127.0.0.1", port: 1234);
-    assert([2, 5, 3, 1].vibesort(model) == [1, 2, 3, 5]);
-}
-```
-
-```d
-public struct Options
-{
-    float temperature;
-    float topP;
-    int n = 0;
-    string stop;
-    int maxTokens = -1;
-    float presencePenalty;
-    float frequencyPenalty;
-    int[string] logitBias;
-}
-
-public struct Model
-{
-    string scheme = "http";
-    string address;
-    uint port;
-    /// API key, may be empty if not required.
-    string key;
-    /// The name of the model which this represents.
-    string name;
-    JSONValue[] messages;
-    Options options;
+    IEndpoint ep = endpoint!("http", "127.0.0.1", 1234);
+    Model m = ep.load("text-embedding-nomic-embed-text-v1.5");
+    assert([2, 5, 3, 1].vibesort(m) == [1, 2, 3, 5]);
 }
 ```
 
