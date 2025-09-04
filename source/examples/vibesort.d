@@ -16,7 +16,7 @@ T vibesort(T)(T arr, Model model)
 unittest
 {
     // LMStudio 127.0.0.1
-    IEndpoint ep = endpoint!("http", "127.0.0.1", 1234);
+    IEndpoint ep = openai!("http", "127.0.0.1", 1234);
     // Load the default/first model.
     Model m = ep.load();
     assert([2, 5, 3, 1].vibesort(m) == [1, 2, 3, 5]);

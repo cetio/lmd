@@ -30,7 +30,6 @@ public struct Options
     int[string] logitBias;
 }
 
-// TODO: Allow this to be abstracted.
 /// Represents a model instance associated with a specific endpoint.
 public struct Model
 {

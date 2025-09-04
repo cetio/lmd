@@ -63,6 +63,7 @@ struct Choice
     float logprobs = float.nan;
     Exit exit = Exit.Missing;
     // TODO: tool_calls and tools
+    // TODO: choice selection and add that to messages
 }
 
 struct Response

@@ -48,7 +48,7 @@ unittest
 
 - [X] `/v1/models`
 - [X] `/v1/chat/completions`
-- [ ] `/v1/completions`
+- [X] `/v1/completions`
 - [ ] `/v1/embeddings`
 - [ ] Tool usage and stats.
 - [X] Response parsing as native structures.

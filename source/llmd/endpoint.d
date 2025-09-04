@@ -34,13 +34,14 @@ interface IEndpoint
     /// Requests a completion from the model provided.
     Response completions(Model model);
 
+    Response legacyCompletions(Model model);
+
     /// Queries for the list of available models from `/v1/models`.
     Model[] available();
 }
 
 /// Represents a strongly-typed OpenAI-style model endpoint for a given scheme, address, and port.
-// TODO: Completions here.
-class Endpoint(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
+class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
 {
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
@@ -114,8 +115,8 @@ public:
     /// Requests a completion from the model provided.
     Response completions(Model model)
     {
-        if (!model.sanity) 
-            throw new Exception("Failed sanity check. Message contents are invalid!");
+        // Temporarily does not do message validation. Restore later!
+        model.sanity();
 
         JSONValue json = JSONValue.emptyObject;
         json.object["model"] = JSONValue(model.name);
@@ -146,6 +147,36 @@ public:
         return http.perform() == 0 ? Response(resp.parseJSON) : Response.init;
     }
 
+    Response legacyCompletions(Model model)
+    {
+        // TODO: Error handling.
+        JSONValue json = JSONValue.emptyObject;
+        json.object["model"] = JSONValue(model.name);
+        json.object["prompt"] = JSONValue(model.messages[$-1]["content"]);
+
+        Options options = model.options;
+        if (options.temperature !is float.nan) json.object["temperature"] = JSONValue(options.temperature);
+        if (options.topP !is float.nan) json.object["top_p"] = JSONValue(options.topP);
+        if (options.n != 0) json.object["n"] = JSONValue(options.n);
+        if (options.stop !is null) json.object["stop"] = JSONValue(options.stop);
+        if (options.presencePenalty !is float.nan) json.object["presence_penalty"] = JSONValue(options.presencePenalty);
+        if (options.frequencyPenalty !is float.nan) json.object["frequency_penalty"] = JSONValue(options.frequencyPenalty);
+        if (options.logitBias !is null) json.object["logit_bias"] = logitBias(options.logitBias);
+        json.object["max_tokens"] = JSONValue(options.maxTokens);
+        json.object["stream"] = JSONValue(false);
+
+        HTTP http = HTTP(url("/v1/completions"));
+        http.method = HTTP.Method.post;
+        http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
+        if (key != null)
+            http.addRequestHeader("Authorization", "Bearer "~key);
+
+        string resp;
+        http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
+
+        return http.perform() == 0 ? Response(resp.parseJSON) : Response.init;
+    }
+
     /// Queries for the list of available models from `/v1/models`.
     Model[] available()
     {
@@ -163,8 +194,8 @@ public:
     }
 }
 
-/// Helper function for creating endpoints as IEndpoint objects.
-IEndpoint endpoint(string SCHEME, string ADDRESS, uint PORT)()
+/// Helper function for creating an OpenAI-style endpoint as an IEndpoint.
+IEndpoint openai(string SCHEME, string ADDRESS, uint PORT)()
 {
-    return cast(IEndpoint)(new Endpoint!(SCHEME, ADDRESS, PORT));
+    return cast(IEndpoint)(new OpenAI!(SCHEME, ADDRESS, PORT));
 }
