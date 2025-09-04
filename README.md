@@ -66,7 +66,7 @@ public struct Model
 
 ## Roadmap
 
-- [ ] `/v1/models`
+- [X] `/v1/models`
 - [X] `/v1/chat/completions`
 - [ ] `/v1/completions`
 - [ ] `/v1/embeddings`
