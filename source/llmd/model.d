@@ -34,6 +34,8 @@ public struct Options
 /// Represents a model instance associated with a specific endpoint.
 public struct Model
 {
+    /// API key used for authentication, may be empty if not required.
+    string key;
     /// Endpoint which this model is bound to.
     IEndpoint ep;
     /// The name of the model.
@@ -58,8 +60,6 @@ public struct Model
     }
 
 package:
-    alias key = ep.key;
-
     this(T)(T ep, 
         string name = null, 
         string owner = "organization_owner", 
