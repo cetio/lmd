@@ -2,8 +2,10 @@ module llmd.response;
 
 import std.string;
 import std.json;
+import llmd.exception;
 
-enum Finish
+/// Represents finish_reason or cause for the end of output by a model.
+enum Exit
 {
     Missing = 0,
     Length = 1,
@@ -19,36 +21,37 @@ enum Finish
     Unknown = 6
 }
 
-Finish asFinish(string str)
+/// Parses a string to retrieve the representation as enum Exit.
+Exit asExit(string str)
 {
     switch (str)
     {
     case null:
-        return Finish.Missing;
+        return Exit.Missing;
     case "length":
-        return Finish.Length;
+        return Exit.Length;
     case "max_tokens":
-        return Finish.Max_Tokens;
+        return Exit.Max_Tokens;
     case "content_filter":
-        return Finish.Content_Filter;
+        return Exit.Content_Filter;
     case "refusal":
-        return Finish.Refusal;
+        return Exit.Refusal;
     case "tool_call":
     case "tool_use":
     case "function_call":
-        return Finish.Tool;
+        return Exit.Tool;
     case "pause":
-        return Finish.Pause;
+        return Exit.Pause;
     case "pause_turn":
-        return Finish.Pause_Turn;
+        return Exit.Pause_Turn;
     case "stop":
-        return Finish.Stop;
+        return Exit.Stop;
     case "end_turn":
-        return Finish.End_Turn;
+        return Exit.End_Turn;
     case "stop_sequence":
-        return Finish.Stop_Sequence;
+        return Exit.Stop_Sequence;
     default:
-        return Finish.Unknown;
+        return Exit.Unknown;
     }
 }
 
@@ -58,21 +61,35 @@ struct Choice
     string think;
     string[] lines;
     float logprobs = float.nan;
-    Finish fin = Finish.Missing;
+    Exit exit = Exit.Missing;
     // TODO: tool_calls and tools
 }
 
 struct Response
 {
     Choice[] choices;
+    ModelException exception;
     long promptTokens;
     long completionTokens;
     long totalTokens;
     string fingerprint;
+    string model;
+    string id;
+    //Kind kind;
 
     this(JSONValue json)
     {
-        if ("choices" in json)
+        if ("error" in json)
+        {
+            JSONValue error = json["error"].object;
+            exception = new ModelException(
+                error["code"].str, 
+                error["message"].str, 
+                error["param"].str, 
+                error["type"].str
+            );
+        }
+        else if ("choices" in json)
         {
             foreach (choice; json["choices"].array)
             {
@@ -83,12 +100,12 @@ struct Response
                     if (str.indexOf("<think>") != -1)
                     {
                         item.think = str[str.indexOf("<think>")..(str.indexOf("</think>") + 8)];
-                        str = str[str.indexOf("</think>") + 8..$];
+                        str = str[str.indexOf("</think>") + 8..$].strip;
                     }
                     item.lines = str.splitLines();
                 }
 
-                item.fin = "finish_reason" in choice ? asFinish(choice["finish_reason"].str) : Finish.Missing;
+                item.exit = "finish_reason" in choice ? asExit(choice["finish_reason"].str) : Exit.Missing;
                 item.logprobs = "logprobs" in choice 
                     ? choice["logprobs"].isNull
                         ? float.nan
@@ -108,5 +125,14 @@ struct Response
         }
 
         fingerprint = "system_fingerprint" in json ? json["system_fingerprint"].str : null;
+        model = "model" in json ? json["model"].str : null;
+        id = "id" in json ? json["id"].str : null;
+    }
+
+    bool bubble()
+    {
+        if (exception !is null)
+            throw exception;
+        return true;
     }
 }

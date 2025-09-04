@@ -3,39 +3,83 @@ module llmd.model;
 import std.json;
 import std.net.curl;
 import std.conv;
+import std.algorithm;
+import std.datetime;
+import std.array;
 import llmd.response;
+import llmd.endpoint;
 
 public struct Options
 {
+    /// Sampling temperature (higher = more random). Use `float.nan` to omit.
     float temperature;
+    /// Nucleus sampling parameter. Use `float.nan` to omit.
     float topP;
+    /// Number of completions to request.
     int n = 0;
+    /// Stop sequence.
     string stop;
+    /// Maximum number of tokens to generate. Use `-1`` to omit.
     int maxTokens = -1;
+    /// Presence penalty scalar.
     float presencePenalty;
+    /// Frequency penalty scalar.
     float frequencyPenalty;
+    /// Per-token logit bias map. Keys are token ids (as strings) and values
+    /// are bias integers.
     int[string] logitBias;
-    // TODO: bool noThink;
 }
 
+// TODO: Allow this to be abstracted.
+/// Represents a model instance associated with a specific endpoint.
 public struct Model
 {
-    string scheme = "http";
-    string address;
-    uint port;
-    /// API key, may be empty if not required.
-    string key;
-    /// The name of the model which this represents.
+    /// Endpoint which this model is bound to.
+    IEndpoint ep;
+    /// The name of the model.
     string name;
-    JSONValue[] messages;
+    /// The organization or owner of the model.
+    string owner;
+    /// Options used for generation.
     Options options;
+    /// The message history associated with this model.
+    JSONValue[] messages;
 
+    /// Sets the system prompt at the beginning of the conversation.
     void setSystemPrompt(string prompt)
     {
         messages = [buildMessage("system", prompt)]~messages;
     }
 
+    /// Converts this model into a human-readable JSON string.
+    string toString()
+    {
+        JSONValue json = JSONValue.emptyObject;
+        json["id"] = name;
+        json["owned_by"] = owner;
+        return json.toPrettyString;
+    }
+
 package:
+    /// Alias for the endpoint API key.
+    alias key = ep.key;
+
+    this(T)(T ep, 
+        string name = null, 
+        string owner = "organization_owner", 
+        Options options = Options.init, 
+        JSONValue[] messages = [])
+    {
+        if (name in ep.models)
+            this = ep.load(name, owner, options, messages);
+        this.ep = ep;
+        this.name = name;
+        this.owner = owner;
+        this.options = options;
+        this.messages = messages;
+    }
+
+    /// Builds a chat message object with the specified role and content.
     JSONValue buildMessage(string role, string content)
     {
         JSONValue json = JSONValue.emptyObject;
@@ -44,6 +88,7 @@ package:
         return json;
     }
 
+    /// Builds a JSON representation of logit bias mappings.
     JSONValue buildLogitBias(int[string] logit_bias)
     {
         JSONValue json = JSONValue.emptyObject;
@@ -52,8 +97,12 @@ package:
         return json;
     }
 
+    /// Performs basic message validation and registers the model with the endpoint if missing.
     bool sanity()
     {
+        if (name !in ep.models)
+            ep.models[name] = this;
+
         foreach (msg; messages)
         {
             if ("role" !in msg || "content" !in msg)
@@ -63,8 +112,14 @@ package:
     }
 
 public:
-    Response send(string prompt)
+    /// Resets the current message stream (ignoring the first system prompt) and sends a new message
+    /// using `prompt` and returns the response of the model. 
+    /// 
+    /// If `think` is false then `"/no-think"` will be appended to the user prompt.
+    Response send(string prompt, bool think = true)
     {
+        if (!think)
+            prompt ~= "/no-think";
         // This is sort of unsafe since we don't sanity check but I don't care.
         if (messages.length > 0 && messages[0]["role"].str == "system")
             messages = messages[0..1]~buildMessage("user", prompt);
@@ -74,15 +129,13 @@ public:
         return completions!Response();
     }
 
+    /// Requests a completion from the model using the current state and options.
     T completions(T)()
         if (is(T == Response) || is(T == JSONValue))
     {
         if (!sanity()) 
             throw new Exception("Failed sanity check. Message contents are invalid!");
-            
-        string url = scheme~"://"~address
-            ~((port != 0 && port != 80 && port != 443) ? ':'~port.to!string : "")
-            ~"/v1/chat/completions";
+
         JSONValue json = JSONValue.emptyObject;
         json.object["model"] = JSONValue(name);
         json.object["messages"] = messages;
@@ -98,7 +151,7 @@ public:
         json.object["stream"] = JSONValue(false);
 
         // This is the worst networking I have seen in my entire life.
-        HTTP http = HTTP(url);
+        HTTP http = HTTP(ep.url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
         if (key != null)
