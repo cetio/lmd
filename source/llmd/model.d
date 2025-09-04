@@ -46,10 +46,7 @@ public struct Model
     JSONValue[] messages;
 
     /// Sets the system prompt at the beginning of the conversation.
-    void setSystemPrompt(string prompt)
-    {
-        messages = [buildMessage("system", prompt)]~messages;
-    }
+    JSONValue[] setSystemPrompt(string prompt) => messages = [message("system", prompt)]~messages;
 
     /// Converts this model into a human-readable JSON string.
     string toString()
@@ -61,7 +58,6 @@ public struct Model
     }
 
 package:
-    /// Alias for the endpoint API key.
     alias key = ep.key;
 
     this(T)(T ep, 
@@ -79,23 +75,7 @@ package:
         this.messages = messages;
     }
 
-    /// Builds a chat message object with the specified role and content.
-    JSONValue buildMessage(string role, string content)
-    {
-        JSONValue json = JSONValue.emptyObject;
-        json.object["role"] = role;
-        json.object["content"] = content;
-        return json;
-    }
-
-    /// Builds a JSON representation of logit bias mappings.
-    JSONValue buildLogitBias(int[string] logit_bias)
-    {
-        JSONValue json = JSONValue.emptyObject;
-        foreach (k; logit_bias.keys)
-            json.object['"'~k~'"'] = JSONValue(logit_bias[k]);
-        return json;
-    }
+    JSONValue message(string role, string content) => ep.message(role, content);
 
     /// Performs basic message validation and registers the model with the endpoint if missing.
     bool sanity()
@@ -122,47 +102,10 @@ public:
             prompt ~= "/no-think";
         // This is sort of unsafe since we don't sanity check but I don't care.
         if (messages.length > 0 && messages[0]["role"].str == "system")
-            messages = messages[0..1]~buildMessage("user", prompt);
+            messages = messages[0..1]~message("user", prompt);
         else
-            messages = [buildMessage("user", prompt)];
+            messages = [message("user", prompt)];
 
-        return completions!Response();
-    }
-
-    /// Requests a completion from the model using the current state and options.
-    T completions(T)()
-        if (is(T == Response) || is(T == JSONValue))
-    {
-        if (!sanity()) 
-            throw new Exception("Failed sanity check. Message contents are invalid!");
-
-        JSONValue json = JSONValue.emptyObject;
-        json.object["model"] = JSONValue(name);
-        json.object["messages"] = messages;
-        if (options.temperature !is float.nan) json.object["temperature"] = JSONValue(options.temperature);
-        if (options.topP !is float.nan) json.object["top_p"] = JSONValue(options.topP);
-        if (options.n != 0) json.object["n"] = JSONValue(options.n);
-        if (options.stop != null) json.object["stop"] = JSONValue(options.stop);
-        if (options.presencePenalty !is float.nan) json.object["presence_penalty"] = JSONValue(options.presencePenalty);
-        if (options.frequencyPenalty !is float.nan) json.object["frequency_penalty"] = JSONValue(options.frequencyPenalty);
-        if (options.logitBias != null) json.object["logit_bias"] = JSONValue(options.logitBias);
-        json.object["max_tokens"] = JSONValue(options.maxTokens);
-        // Streaming is not currently supported.
-        json.object["stream"] = JSONValue(false);
-
-        // This is the worst networking I have seen in my entire life.
-        HTTP http = HTTP(ep.url("/v1/chat/completions"));
-        http.method = HTTP.Method.post;
-        http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        if (key != null)
-            http.addRequestHeader("Authorization", "Bearer "~key);
-
-        string resp;
-        http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
-
-        static if (is(T == Response))
-            return http.perform() == 0 ? Response(resp.parseJSON) : Response.init;
-        else static if (is(T == JSONValue))
-            return http.perform() == 0 ? resp.parseJSON : JSONValue.emptyObject;
+        return ep.completions(this);
     }
 }

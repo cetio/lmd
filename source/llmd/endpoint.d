@@ -7,6 +7,7 @@ import std.algorithm;
 import std.net.curl;
 import std.array;
 import llmd.exception;
+import llmd.response;
 
 /// Represents a generic interface for interacting with a language model API endpoint.
 interface IEndpoint
@@ -16,6 +17,9 @@ interface IEndpoint
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
 
+    /// Creates a chat message object with the specified role and content.
+    JSONValue message(string role, string content);
+    
     /// Creates a string URL for the provided API query using the current endpoint scheme, address, and port.
     string url(string api);
 
@@ -26,6 +30,9 @@ interface IEndpoint
         string owner = "organization_owner", 
         Options options = Options.init,
         JSONValue[] messages = []);
+    
+    /// Requests a completion from the model provided.
+    Response completions(Model model);
 
     /// Queries for the list of available models from `/v1/models`.
     Model[] available();
@@ -59,7 +66,25 @@ package:
         return ret;
     }
 
+    /// Builds a JSON representation of logit bias mappings.
+    JSONValue logitBias(int[string] logitBias)
+    {
+        JSONValue json = JSONValue.emptyObject;
+        foreach (k; logitBias.keys)
+            json.object['"'~k~'"'] = JSONValue(logitBias[k]);
+        return json;
+    }
+
 public:
+    /// Builds a chat message object with the specified role and content.
+    JSONValue message(string role, string content)
+    {
+        JSONValue json = JSONValue.emptyObject;
+        json.object["role"] = role;
+        json.object["content"] = content;
+        return json;
+    }
+
     /// Creates a string URL for the provided API query using the current endpoint scheme, address, and port.
     string url(string api)
     {
@@ -69,8 +94,6 @@ public:
     }
 
     /// Loads a model from this endpoint, optionally creating it if not cached.
-    ///
-    /// This will send a completion to the model with no content to validate if the model may be loaded.
     Model load(string name = null, 
         string owner = "organization_owner", 
         Options options = Options.init,
@@ -87,8 +110,42 @@ public:
         Model m = name in models 
             ? models[name] 
             : (models[name] = Model(this, name, owner, options, messages));
-        m.send("", true).bubble();
         return m;
+    }
+
+    /// Requests a completion from the model provided.
+    Response completions(Model model)
+    {
+        if (!model.sanity) 
+            throw new Exception("Failed sanity check. Message contents are invalid!");
+
+        JSONValue json = JSONValue.emptyObject;
+        json.object["model"] = JSONValue(model.name);
+        json.object["messages"] = model.messages;
+
+        Options options = model.options;
+        if (options.temperature !is float.nan) json.object["temperature"] = JSONValue(options.temperature);
+        if (options.topP !is float.nan) json.object["top_p"] = JSONValue(options.topP);
+        if (options.n != 0) json.object["n"] = JSONValue(options.n);
+        if (options.stop != null) json.object["stop"] = JSONValue(options.stop);
+        if (options.presencePenalty !is float.nan) json.object["presence_penalty"] = JSONValue(options.presencePenalty);
+        if (options.frequencyPenalty !is float.nan) json.object["frequency_penalty"] = JSONValue(options.frequencyPenalty);
+        if (options.logitBias != null) json.object["logit_bias"] = logitBias(options.logitBias);
+        json.object["max_tokens"] = JSONValue(options.maxTokens);
+        // Streaming is not currently supported.
+        json.object["stream"] = JSONValue(false);
+
+        // This is the worst networking I have seen in my entire life.
+        HTTP http = HTTP(url("/v1/chat/completions"));
+        http.method = HTTP.Method.post;
+        http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
+        if (key != null)
+            http.addRequestHeader("Authorization", "Bearer "~key);
+
+        string resp;
+        http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
+
+        return http.perform() == 0 ? Response(resp.parseJSON) : Response.init;
     }
 
     /// Queries for the list of available models from `/v1/models`.
