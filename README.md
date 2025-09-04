@@ -1,9 +1,6 @@
 # LLMD
 
-A tiny, pragmatic D client for OpenAI-style chat and text completions.
-Small, explicit, and practical — designed to be easy to read and to work seamlessly with LMStudio for running models locally.
-
-LLMD focuses on being minimal and predictable while handling the common LLM tasks you actually need.
+LLMD provides endpoint and model support for local and remote LLM/AI models. Natively, it is designed to provide extensive and dynamic support for OpenAI with agnostic model and endpoint interfaces.
 
 ## Features
 
