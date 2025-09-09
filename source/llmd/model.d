@@ -28,6 +28,12 @@ public struct Options
     /// Per-token logit bias map. Keys are token ids (as strings) and values
     /// are bias integers.
     int[string] logitBias;
+    /// Available tools for the model to use.
+    Tool[] tools;
+    /// Tool choice configuration.
+    ToolChoice toolChoice;
+    /// Enable streaming responses.
+    bool stream = false;
 }
 
 /// Represents a model instance associated with a specific endpoint.
@@ -48,6 +54,10 @@ public struct Model
 
     /// Sets the system prompt at the beginning of the conversation.
     JSONValue[] setSystemPrompt(string prompt) => messages = [message("system", prompt)]~messages;
+
+    /// Adds a tool message to the conversation.
+    JSONValue[] addToolMessage(string toolCallId, string content) => 
+        messages ~= ep.message("tool", content, toolCallId);
 
     /// Converts this model into a human-readable JSON string.
     string toString()
@@ -99,5 +109,21 @@ public:
             messages = [message("user", prompt)];
 
         return ep.completions(this);
+    }
+
+    /// Sends a streaming request and yields chunks as they arrive.
+    /// 
+    /// If `think` is false then `"/no-think"` will be appended to the user prompt.
+    void stream(void delegate(StreamChunk) F)(string prompt, bool think = true)
+    {
+        if (!think)
+            prompt ~= "/no-think";
+        // This is sort of unsafe since we don't sanity check but I don't care.
+        if (messages.length > 0 && messages[0]["role"].str == "system")
+            messages = messages[0..1]~message("user", prompt);
+        else
+            messages = [message("user", prompt)];
+
+        ep.stream!F(this);
     }
 }
