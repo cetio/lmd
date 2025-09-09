@@ -5,7 +5,7 @@
 	"copyright": "Copyright © 2025, cet",
 	"description": ",",
 	"license": "proprietary",
-	"name": "llmd",
+	"name": "lmd",
 	"targetType": "library",
 	"sourcePaths": [
 		"source"

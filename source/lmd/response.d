@@ -1,8 +1,8 @@
-module llmd.response;
+module lmd.response;
 
 import std.string;
 import std.json;
-import llmd.exception;
+import lmd.exception;
 
 /// Represents finish_reason or cause for the end of output by a model.
 enum Exit

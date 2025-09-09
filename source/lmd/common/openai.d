@@ -1,56 +1,24 @@
-module llmd.endpoint;
+module lmd.common.openai;
 
-import llmd.model;
+// So many imports :(
 import std.conv;
-import std.json;
 import std.algorithm;
 import std.net.curl;
 import std.array;
-import llmd.exception;
-import llmd.response;
-
-/// Represents a generic interface for interacting with a language model API endpoint.
-interface IEndpoint
-{
-    /// API key used for authentication, may be empty if not required.
-    static string key;
-    /// Cache of loaded models keyed by their name.
-    static Model[string] models;
-
-    /// Creates a chat message object with the specified role and content.
-    JSONValue message(string role, string content);
-    
-    /// Creates a tool message object with the specified content and tool call ID.
-    JSONValue message(string role, string content, string toolCallId);
-    
-    /// Creates a string URL for the provided API query using the current endpoint scheme, address, and port.
-    string url(string api);
-
-    /// Loads a model from this endpoint, optionally creating it if not cached.
-    ///
-    /// This will send a completion to the model with no content to validate if the model may be loaded.
-    Model load(string name = null, 
-        string owner = "organization_owner", 
-        Options options = Options.init,
-        JSONValue[] messages = []);
-    
-    /// Requests a completion from the model provided.
-    Response completions(Model model);
-
-    /// Requests a streaming completion from the model provided.
-    void stream(void delegate(StreamChunk) F)(Model model);
-
-    Response legacyCompletions(Model model);
-
-    /// Queries for the list of available models from `/v1/models`.
-    Model[] available();
-}
+import std.json;
+public import lmd.endpoint;
+public import lmd.model;
+public import lmd.response;
+import lmd.exception;
+// Not publicly importing exception because it's largely not very useful.
 
 /// Represents a strongly-typed OpenAI-style model endpoint for a given scheme, address, and port.
 class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
 {
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
+    /// Whether this endpoint supports streaming.
+    enum bool supportsStreaming = true;
 
 package:
     /// Converts the `/v1/models` JSON response into a list of `Model` objects.
@@ -182,7 +150,7 @@ public:
         return m;
     }
 
-    /// Requests a completion from the model provided.
+    /// Requests a completion from '/v1/chat/completions' for `model`.
     Response completions(Model model)
     {
         // Temporarily does not do message validation. Restore later!
@@ -204,10 +172,18 @@ public:
         return http.perform() == 0 ? Response(resp.parseJSON) : Response.init;
     }
 
-    /// Requests a streaming completion from the model provided.
+    /// Requests a streaming completion from '/v1/chat/completions' for `model`.
     // TODO: This is really redundant?
     void stream(void delegate(StreamChunk) F)(Model model)
     {
+        if (!supportsStreaming)
+            throw new ModelException(
+                "not_supported", 
+                "Streaming is not supported by this model.", 
+                "streaming", 
+                "invalid_request_error"
+            );
+
         // Temporarily does not do message validation. Restore later!
         model.sanity();
 
@@ -264,6 +240,7 @@ public:
         http.perform();
     }
 
+    /// Requests a legacy completion from `/v1/completions` for `model`.
     Response legacyCompletions(Model model)
     {
         // TODO: Error handling.

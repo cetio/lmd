@@ -1,4 +1,4 @@
-module llmd.model;
+module lmd.model;
 
 import std.json;
 import std.net.curl;
@@ -6,8 +6,8 @@ import std.conv;
 import std.algorithm;
 import std.datetime;
 import std.array;
-import llmd.response;
-import llmd.endpoint;
+import lmd.response;
+import lmd.endpoint;
 
 public struct Options
 {
@@ -100,6 +100,7 @@ public:
     /// If `think` is false then `"/no-think"` will be appended to the user prompt.
     Response send(string prompt, bool think = true)
     {
+        // TODO: Redundancy.
         if (!think)
             prompt ~= "/no-think";
         // This is sort of unsafe since we don't sanity check but I don't care.

@@ -1,4 +1,5 @@
-module llmd.exception;
+module lmd.exception;
+// World's worst file? So short.
 
 /// Represents an exception thrown by a model response or load.
 class ModelException : Exception

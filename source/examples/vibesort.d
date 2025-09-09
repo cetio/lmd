@@ -3,7 +3,7 @@ module examples.vibesort;
 import std.conv;
 import std.traits;
 import std.string;
-import llmd;
+import lmd.common.openai;
 
 T vibesort(T)(T arr, Model model)
     if (isDynamicArray!T || isStaticArray!T)

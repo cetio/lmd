@@ -1,10 +1,10 @@
-# LLMD
+# LMD
 
-LLMD provides endpoint and model support for local and remote LLM/AI models. Natively, it is designed to provide extensive and dynamic support for OpenAI with agnostic model and endpoint interfaces.
+LMD provides endpoint and model support for local and remote LLM/AI models. Natively, it is designed to provide extensive and dynamic support for OpenAI with agnostic model and endpoint interfaces.
 
 ## Features
 
-LLMD is designed to be highly extensible, supporting API keys per model and using interfaced endpoints to allow for defining new endpoints. 
+LMD is designed to be highly extensible, supporting API keys per model and using interfaced endpoints to allow for defining new endpoints. 
 
 Supported endpoints:
 - OpenAI
@@ -49,7 +49,7 @@ unittest
 }
 ```
 
-When LLMD becomes more stable, further usage will be documented.
+When LMD becomes more stable, further usage will be documented.
 
 ## Roadmap
 
@@ -65,10 +65,10 @@ When LLMD becomes more stable, further usage will be documented.
 
 ## Contribution
 
-LLMD is currently a very early release, and lacks documentation or fleshed out support for other endpoints than completion.
+LMD is currently a very early release, and lacks documentation or fleshed out support for other endpoints than completion.
 
 If you would like to contribute, please just make sure to follow D conventions and conventions used in my code, ideally with a formatter but any contributions are welcome!
 
 ## License
 
-LLMD is licensed under [AGPL-3.0](LICENSE.txt).
+LMD is licensed under [AGPL-3.0](LICENSE.txt).
