@@ -12,7 +12,7 @@ T vibesort(T)(T arr, Model model)
     Response resp = model.send(
         "Sort this array and only output the array in D syntax without any code blocks or additional formatting:"~arr.to!string
     );
-    return resp.choices[0].lines[$-1]
+    return resp.choices[0].pick(0)
         .replace("{", "[")
         .replace("}", "]")
     .to!T;

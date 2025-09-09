@@ -3,8 +3,9 @@ module lmd.response;
 import std.string;
 import std.json;
 import lmd.exception;
+import lmd.model;
 
-/// Represents finish_reason or cause for the end of output by a model.
+/// Represents `finish_reason` or cause for the end of output by a model.
 enum Exit
 {
     Missing = 0,
@@ -101,103 +102,96 @@ ToolCall[] parseToolCalls(JSONValue[] toolCallsArray)
     return result;
 }
 
-/// Parses content string and extracts think tags.
-string[] parseContent(string content)
-{
-    if (content.indexOf("<think>") != -1)
-    {
-        string think = content[content.indexOf("<think>")..(content.indexOf("</think>") + 8)];
-        string main = content[content.indexOf("</think>") + 8..$].strip;
-        return [think] ~ main.splitLines();
-    }
-    return content.splitLines();
-}
-
-/// Parses a choice from JSON, handling both regular and streaming formats.
-Choice parseChoice(JSONValue json, bool isStreaming = false)
-{
-    Choice item;
-    
-    // Handle content - either from "message" or "delta"
-    JSONValue contentSource = isStreaming && "delta" in json 
-        ? json["delta"] 
-        : json["message"];
-        
-    if ("content" in contentSource)
-        item.lines = parseContent(contentSource["content"].str);
-    
-    // Parse tool calls from the appropriate location
-    if (isStreaming && "delta" in json && "tool_calls" in json["delta"])
-        item.toolCalls = parseToolCalls(json["delta"]["tool_calls"].array);
-    else if ("message" in json && "tool_calls" in json["message"])
-        item.toolCalls = parseToolCalls(json["message"]["tool_calls"].array);
-    else if ("tool_calls" in json)
-        // Legacy format fallback
-        item.toolCalls = parseToolCalls(json["tool_calls"].array);
-    
-    // Parse other fields
-    item.exit = "finish_reason" in json ? asExit(json["finish_reason"].str) : Exit.Missing;
-    item.logprobs = "logprobs" in json 
-        ? json["logprobs"].isNull
-            ? float.nan
-            : json["logprobs"].floating
-        : float.nan;
-    
-    return item;
-}
-
-/// Parses common response fields from JSON.
-void parseCommonFields(JSONValue json, ref ModelException exception, 
-    ref string fingerprint, ref string model, ref string id)
-{
-    if ("error" in json)
-    {
-        JSONValue error = json["error"].object;
-        exception = new ModelException(
-            error["code"].str, 
-            error["message"].str, 
-            error["param"].str,
-            error["type"].str
-        );
-    }
-    
-    fingerprint = "system_fingerprint" in json ? json["system_fingerprint"].str : null;
-    model = "model" in json ? json["model"].str : null;
-    id = "id" in json ? json["id"].str : null;
-}
-
 struct Choice
 {
-    // Not adding "role" was a choice.
+    Model model;
     string think;
-    string[] lines;
+    string content;
     float logprobs = float.nan;
     Exit exit = Exit.Missing;
     ToolCall[] toolCalls;
     // TODO: choice selection and add that to messages
+
+    this(Model model, JSONValue json, bool streaming = false)
+    {
+        this.model = model;
+        JSONValue raw = streaming && "delta" in json 
+            ? json["delta"] 
+            : json["message"];
+            
+        if ("content" in raw)
+        {
+            if (raw["content"].str.indexOf("<think>") != -1)
+            {
+                content = raw["content"].str;
+
+                think = content[content.indexOf("<think>")..(content.indexOf("</think>") + 8)];
+                content = content[content.indexOf("</think>") + 8..$];
+            }
+            else
+                content = raw["content"].str;
+        }
+        
+        // Parse tool calls from the appropriate location
+        if (streaming && "delta" in json && "tool_calls" in json["delta"])
+            toolCalls = parseToolCalls(json["delta"]["tool_calls"].array);
+        else if ("message" in json && "tool_calls" in json["message"])
+            toolCalls = parseToolCalls(json["message"]["tool_calls"].array);
+        else if ("tool_calls" in json)
+            // Legacy format fallback
+            toolCalls = parseToolCalls(json["tool_calls"].array);
+        
+        // Parse other fields
+        exit = "finish_reason" in json ? asExit(json["finish_reason"].str) : Exit.Missing;
+        logprobs = "logprobs" in json 
+            ? json["logprobs"].isNull
+                ? float.nan
+                : json["logprobs"].floating
+            : float.nan;
+    }
+
+    /// Picks a line from the content and chooses this choice for the model.
+    string pick(int index)
+    {
+        scope (exit) model.choose(this);
+        return content.strip.splitLines()[index];
+    }
 }
 
 struct Response
 {
+    Model model;
     Choice[] choices;
     ModelException exception;
     long promptTokens;
     long completionTokens;
     long totalTokens;
     string fingerprint;
-    string model;
     string id;
     //Kind kind;
 
-    this(JSONValue json)
+    this(Model model, JSONValue json)
     {
-        parseCommonFields(json, exception, fingerprint, model, id);
+        this.model = model;
+        if ("error" in json)
+        {
+            JSONValue error = json["error"].object;
+            exception = new ModelException(
+                error["code"].str, 
+                error["message"].str, 
+                error["param"].str,
+                error["type"].str
+            );
+        }
+        
+        fingerprint = "system_fingerprint" in json ? json["system_fingerprint"].str : null;
+        id = "id" in json ? json["id"].str : null;
         
         if ("choices" in json)
         {
             foreach (choice; json["choices"].array)
             {
-                Choice item = parseChoice(choice, false);
+                Choice item = Choice(model, choice, false);
                 if (item != Choice.init)
                     choices ~= item;
             }
@@ -222,22 +216,36 @@ struct Response
 /// Represents a streaming chunk from the API.
 struct StreamChunk
 {
+    Model model;
     Choice[] choices;
     ModelException exception;
     string fingerprint;
-    string model;
     string id;
     bool done = false;
 
-    this(JSONValue json)
+    this(Model model, JSONValue json)
     {
-        parseCommonFields(json, exception, fingerprint, model, id);
+        // TODO: Consolidate with an internal object?
+        this.model = model;
+        if ("error" in json)
+        {
+            JSONValue error = json["error"].object;
+            exception = new ModelException(
+                error["code"].str, 
+                error["message"].str, 
+                error["param"].str,
+                error["type"].str
+            );
+        }
+        
+        fingerprint = "system_fingerprint" in json ? json["system_fingerprint"].str : null;
+        id = "id" in json ? json["id"].str : null;
         
         if ("choices" in json)
         {
             foreach (choice; json["choices"].array)
             {
-                Choice item = parseChoice(choice, true);
+                Choice item = Choice(model, choice, true);
                 if (item != Choice.init)
                     choices ~= item;
             }

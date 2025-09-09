@@ -10,7 +10,6 @@ public import lmd.endpoint;
 public import lmd.model;
 public import lmd.response;
 import lmd.exception;
-// Not publicly importing exception because it's largely not very useful.
 
 /// Represents a strongly-typed OpenAI-style model endpoint for a given scheme, address, and port.
 class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
@@ -163,13 +162,13 @@ public:
         HTTP http = HTTP(url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        if (key != null)
-            http.addRequestHeader("Authorization", "Bearer "~key);
+        if (model.key != null)
+            http.addRequestHeader("Authorization", "Bearer "~model.key);
 
         string resp;
         http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
 
-        return http.perform() == 0 ? Response(resp.parseJSON) : Response.init;
+        return http.perform() == 0 ? Response(model, resp.parseJSON) : Response.init;
     }
 
     /// Requests a streaming completion from '/v1/chat/completions' for `model`.
@@ -193,11 +192,12 @@ public:
         HTTP http = HTTP(url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        if (key != null)
-            http.addRequestHeader("Authorization", "Bearer "~key);
+        if (model.key != null)
+            http.addRequestHeader("Authorization", "Bearer "~model.key);
 
         string buffer;
-        http.onReceive((ubyte[] data) { 
+        http.onReceive((ubyte[] data) 
+        { 
             buffer ~= cast(string)data;
             
             // Process complete lines from the buffer
@@ -228,10 +228,8 @@ public:
                     onChunk(chunk);
                 }
                 catch (Exception)
-                {
                     // Skip malformed JSON chunks
                     continue;
-                }
             }
             
             return data.length; 
@@ -264,13 +262,13 @@ public:
         HTTP http = HTTP(url("/v1/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        if (key != null)
-            http.addRequestHeader("Authorization", "Bearer "~key);
+        if (model.key != null)
+            http.addRequestHeader("Authorization", "Bearer "~model.key);
 
         string resp;
         http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
 
-        return http.perform() == 0 ? Response(resp.parseJSON) : Response.init;
+        return http.perform() == 0 ? Response(model, resp.parseJSON) : Response.init;
     }
 
     /// Queries for the list of available models from `/v1/models`.
@@ -278,8 +276,9 @@ public:
     {
         HTTP http = HTTP(url("/v1/models"));
         http.method = HTTP.Method.get;
-        if (key !is null)
-            http.addRequestHeader("Authorization", "Bearer "~key);
+        // TODO: Add authorization.
+        // if (key !is null)
+        //     http.addRequestHeader("Authorization", "Bearer "~key);
 
         string resp;
         http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });

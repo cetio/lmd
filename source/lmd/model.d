@@ -53,7 +53,18 @@ public struct Model
     JSONValue[] messages;
 
     /// Sets the system prompt at the beginning of the conversation.
-    JSONValue[] setSystemPrompt(string prompt) => messages = [message("system", prompt)]~messages;
+    JSONValue[] setSystemPrompt(string prompt)
+    {
+        if (messages.length > 0 && messages[0]["role"].str == "system")
+            messages = [message("system", prompt)]~messages[1..$];
+        else
+            messages = [message("system", prompt)]~messages;
+        return messages;
+    }
+
+    // TODO: Should this sanity check?
+    JSONValue[] choose(Choice choice) =>
+        messages ~= message("assistant", choice.content);
 
     /// Adds a tool message to the conversation.
     JSONValue[] addToolMessage(string toolCallId, string content) => 
@@ -84,7 +95,8 @@ package:
         this.messages = messages;
     }
 
-    JSONValue message(string role, string content) => ep.message(role, content);
+    JSONValue message(string role, string content) => 
+        ep.message(role, content);
 
     bool sanity()
     {
