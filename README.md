@@ -4,6 +4,9 @@ A D library for interfacing with LLM APIs. Connect to OpenAI, LMStudio, or any c
 
 ## Install
 
+> [!WARNING]
+> This is not true. LMD is not on Dub, yet.
+
 Add to your `dub.json`:
 
 ```json
