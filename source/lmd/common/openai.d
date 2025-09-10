@@ -155,7 +155,6 @@ public:
         // Temporarily does not do message validation. Restore later!
         model.sanity();
 
-        // TODO: stream field in Options is useless.
         JSONValue json = buildRequest(model, false);
 
         // This is the worst networking I have seen in my entire life.
@@ -241,7 +240,6 @@ public:
     /// Requests a legacy completion from `/v1/completions` for `model`.
     Response legacyCompletions(Model model)
     {
-        // TODO: Error handling.
         JSONValue json = JSONValue.emptyObject;
         json.object["model"] = JSONValue(model.name);
         json.object["prompt"] = JSONValue(model.messages[$-1]["content"]);
@@ -262,6 +260,7 @@ public:
         HTTP http = HTTP(url("/v1/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
+        // TODO: Modularize authorization per endpoint.
         if (model.key != null)
             http.addRequestHeader("Authorization", "Bearer "~model.key);
 

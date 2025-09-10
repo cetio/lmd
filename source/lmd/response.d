@@ -110,7 +110,6 @@ struct Choice
     float logprobs = float.nan;
     Exit exit = Exit.Missing;
     ToolCall[] toolCalls;
-    // TODO: choice selection and add that to messages
 
     this(Model model, JSONValue json, bool streaming = false)
     {

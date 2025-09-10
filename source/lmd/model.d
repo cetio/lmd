@@ -33,7 +33,7 @@ public struct Options
     /// Tool choice configuration.
     ToolChoice toolChoice;
     /// Enable streaming responses.
-    bool stream = false;
+    //bool stream = false;
 }
 
 /// Represents a model instance associated with a specific endpoint.
