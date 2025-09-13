@@ -1,21 +1,10 @@
 # LMD
 
-A D library for interfacing with LLM APIs. Connect to OpenAI, LMStudio, or any compatible endpoint. Send messages, get responses, manage conversations.
+LMD is a library for interfacing with LLM APIs. Connect to OpenAI, LMStudio, or any compatible endpoint. Send messages, get responses, manage conversations.
 
-## Install
+The system is modular, allowing for new Endpoints to be implemented through `IEndpoint` and supporting common API out of the box.
 
-> [!WARNING]
-> This is not true. LMD is not on Dub, yet.
-
-Add to your `dub.json`:
-
-```json
-{
-    "dependencies": {
-        "lmd": "~>0.1.0"
-    }
-}
-```
+Streaming is designed to be intuitive and threadable using `ResponseStream` which can be blocked (forcing a wait for each iterative `Response`) or classic with a callback for incoming responses.
 
 ## Use
 
@@ -23,6 +12,7 @@ Import the library:
 
 ```d
 import lmd;
+// Or for specifically OpenAI-style endpoints:
 import lmd.common.openai;
 ```
 
@@ -55,17 +45,6 @@ model.stream((StreamChunk chunk) {
         write(choice.content);
     }
 })("Tell me a story");
-```
-
-Configure generation options:
-
-```d
-Options opts;
-opts.temperature = 0.7;
-opts.maxTokens = 100;
-opts.topP = 0.9;
-
-Model model = ep.load("model-name", "owner", opts);
 ```
 
 Handle tool calls:
@@ -103,42 +82,6 @@ Works with:
 - Ollama
 - Any OpenAI-compatible server
 
-## Examples
-
-See `source/examples/vibesort.d` for a complete working example.
-
-## API Reference
-
-### IEndpoint
-Interface for LLM endpoints. Create with `openai!(scheme, address, port)`.
-
-### Model
-Represents a loaded model instance. Use `ep.load()` to create.
-
-**Methods:**
-- `send(string prompt)` - Send message, get response
-- `stream(void delegate(StreamChunk) callback)(string prompt)` - Stream response
-- `setSystemPrompt(string prompt)` - Set system message
-- `addToolMessage(string toolCallId, string content)` - Add tool result
-
-### Response
-Contains model response and metadata.
-
-**Fields:**
-- `choices[]` - Array of response choices
-- `totalTokens` - Token usage count
-- `exception` - Error if request failed
-
-### Options
-Generation parameters.
-
-**Fields:**
-- `temperature` - Randomness (0.0-2.0)
-- `maxTokens` - Maximum tokens to generate
-- `topP` - Nucleus sampling
-- `tools[]` - Available tools for model
-- `stream` - Enable streaming
-
 ## Roadmap
 
 - [X] /v1/models
@@ -149,10 +92,11 @@ Generation parameters.
 - [ ] /v1/image
 - [X] Streaming
 - [ ] Standardize no-think
+- [ ] OpenAI support
 - [ ] Claude and Gemini support
-- [ ] Authorization for `endpoint.available`
 - [ ] Tool usage and statistics
 - [ ] Document all code with DDocs formatting
+- [ ] Support other schema than HTTP
 
 ## Contributing
 
