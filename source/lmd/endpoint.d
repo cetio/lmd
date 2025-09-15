@@ -11,13 +11,15 @@ import lmd.response;
 /// Represents a generic interface for interacting with a language model API endpoint.
 interface IEndpoint
 {
+    struct Options
+    {
+        JSONValue toJSON();
+    }
+    
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
     /// API key for this endpoint.
     static string key;
-    /// Whether this endpoint supports streaming.
-    // TODO: Streaming definitely varies by endpoint and Response should be more modular.
-    enum bool supportsStreaming = false;
 
     /// Creates a chat message object with the specified role and content.
     JSONValue message(string role, string content);
@@ -33,14 +35,14 @@ interface IEndpoint
     /// This will send a completion to the model with no content to validate if the model may be loaded.
     Model load(string name = null, 
         string owner = "organization_owner", 
-        Options options = Options.init,
+        JSONValue options = JSONValue.emptyObject,
         JSONValue[] messages = []);
     
     /// Requests a completion from '/v1/chat/completions' for `model`.
     Response completions(Model model);
 
     /// Requests a streaming completion from '/v1/chat/completions' for `model'.
-    ResponseStream stream(void delegate(Response) callback)(Model model);
+    ResponseStream stream(Model model, void delegate(Response) callback = null);
 
     /// Internal function to commence streaming for a ResponseStream.
     void _commence(ResponseStream stream);
@@ -50,8 +52,7 @@ interface IEndpoint
 
     /// Requests embeddings for the given text using the specified model.
     Response embeddings(Model model);
-    
+
     /// Queries for the list of available models from `/v1/models`.
     Model[] available();
-
 }

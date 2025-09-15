@@ -16,12 +16,94 @@ import mink.sync.atomic;
 /// Represents a strongly-typed OpenAI-style model endpoint for a given scheme, address, and port.
 class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
 {
+    struct Options
+    {
+        /// Sampling temperature (higher = more random). Use `float.nan` to omit.
+        float temperature;
+        /// Nucleus sampling parameter. Use `float.nan` to omit.
+        float topP;
+        /// Number of completions to request.
+        int n = 0;
+        /// Stop sequence.
+        string stop;
+        /// Maximum number of tokens to generate. Use `-1`` to omit.
+        int maxTokens = -1;
+        /// Presence penalty scalar.
+        float presencePenalty;
+        /// Frequency penalty scalar.
+        float frequencyPenalty;
+        /// Per-token logit bias map. Keys are token ids (as strings) and values
+        /// are bias integers.
+        int[string] logitBias;
+        /// Available tools for the model to use.
+        Tool[] tools;
+        /// Tool choice configuration.
+        ToolChoice toolChoice;
+        /// Enable streaming responses.
+        //bool stream = false;
+        // TODO: Support variables and refer to think as reasoning (add reasoning effort and stuff?) (OpenAI options)
+
+        /// Builds a JSON representation of logit bias mappings.
+        JSONValue calcLogitBias(int[string] logitBias)
+        {
+            JSONValue json = JSONValue.emptyObject;
+            foreach (k; logitBias.keys)
+                json.object['"'~k~'"'] = JSONValue(logitBias[k]);
+            return json;
+        }
+
+        JSONValue toJSON()
+        {
+            JSONValue json = JSONValue.emptyObject;
+            if (temperature !is float.nan) json.object["temperature"] = JSONValue(temperature);
+            if (topP !is float.nan) json.object["top_p"] = JSONValue(topP);
+            if (n != 0) json.object["n"] = JSONValue(n);
+            if (stop != null) json.object["stop"] = JSONValue(stop);
+            if (presencePenalty !is float.nan) 
+                json.object["presence_penalty"] = JSONValue(presencePenalty);
+            if (frequencyPenalty !is float.nan) 
+                json.object["frequency_penalty"] = JSONValue(frequencyPenalty);
+            if (logitBias != null) 
+                json.object["logit_bias"] = calcLogitBias(logitBias);
+            json.object["max_tokens"] = JSONValue(maxTokens);
+            
+            // Add tools if provided
+            if (tools.length > 0)
+            {
+                JSONValue toolsArray = JSONValue.emptyArray;
+                foreach (tool; tools)
+                {
+                    JSONValue toolJson = JSONValue.emptyObject;
+                    toolJson.object["type"] = tool.type;
+                    toolJson.object["function"] = JSONValue.emptyObject;
+                    toolJson.object["function"].object["name"] = tool.name;
+                    toolJson.object["function"].object["description"] = tool.description;
+                    toolJson.object["function"].object["parameters"] = tool.parameters;
+                    toolsArray.array ~= toolJson;
+                }
+                json.object["tools"] = toolsArray;
+            }
+            
+            // Add tool_choice if provided and not auto
+            if (toolChoice.type != "auto")
+            {
+                JSONValue toolChoiceJson = JSONValue.emptyObject;
+                toolChoiceJson.object["type"] = toolChoice.type;
+                if (toolChoice.type == "function" && toolChoice.name.length > 0)
+                {
+                    toolChoiceJson.object["function"] = JSONValue.emptyObject;
+                    toolChoiceJson.object["function"].object["name"] = toolChoice.name;
+                }
+                json.object["tool_choice"] = toolChoiceJson;
+            }
+            return json;
+        }
+    }
+
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
     /// API key for this endpoint.
     static string key;
-    /// Whether this endpoint supports streaming.
-    enum bool supportsStreaming = true;
 
 package:
     /// Converts the `/v1/models` JSON response into a list of `Model` objects.
@@ -42,66 +124,13 @@ package:
         return ret;
     }
 
-    /// Builds a JSON representation of logit bias mappings.
-    JSONValue logitBias(int[string] logitBias)
-    {
-        JSONValue json = JSONValue.emptyObject;
-        foreach (k; logitBias.keys)
-            json.object['"'~k~'"'] = JSONValue(logitBias[k]);
-        return json;
-    }
-
     /// Builds the JSON request for completions.
     JSONValue buildRequest(Model model, bool streaming = false)
     {
-        JSONValue json = JSONValue.emptyObject;
+        JSONValue json = model._options;
         json.object["model"] = JSONValue(model.name);
         json.object["messages"] = model.messages;
-
-        Options options = model.options;
-        if (options.temperature !is float.nan) json.object["temperature"] = JSONValue(options.temperature);
-        if (options.topP !is float.nan) json.object["top_p"] = JSONValue(options.topP);
-        if (options.n != 0) json.object["n"] = JSONValue(options.n);
-        if (options.stop != null) json.object["stop"] = JSONValue(options.stop);
-        if (options.presencePenalty !is float.nan) 
-            json.object["presence_penalty"] = JSONValue(options.presencePenalty);
-        if (options.frequencyPenalty !is float.nan) 
-            json.object["frequency_penalty"] = JSONValue(options.frequencyPenalty);
-        if (options.logitBias != null) 
-            json.object["logit_bias"] = logitBias(options.logitBias);
-        json.object["max_tokens"] = JSONValue(options.maxTokens);
         json.object["stream"] = JSONValue(streaming);
-        
-        // Add tools if provided
-        if (options.tools.length > 0)
-        {
-            JSONValue toolsArray = JSONValue.emptyArray;
-            foreach (tool; options.tools)
-            {
-                JSONValue toolJson = JSONValue.emptyObject;
-                toolJson.object["type"] = tool.type;
-                toolJson.object["function"] = JSONValue.emptyObject;
-                toolJson.object["function"].object["name"] = tool.name;
-                toolJson.object["function"].object["description"] = tool.description;
-                toolJson.object["function"].object["parameters"] = tool.parameters;
-                toolsArray.array ~= toolJson;
-            }
-            json.object["tools"] = toolsArray;
-        }
-        
-        // Add tool_choice if provided and not auto
-        if (options.toolChoice.type != "auto")
-        {
-            JSONValue toolChoiceJson = JSONValue.emptyObject;
-            toolChoiceJson.object["type"] = options.toolChoice.type;
-            if (options.toolChoice.type == "function" && options.toolChoice.name.length > 0)
-            {
-                toolChoiceJson.object["function"] = JSONValue.emptyObject;
-                toolChoiceJson.object["function"].object["name"] = options.toolChoice.name;
-            }
-            json.object["tool_choice"] = toolChoiceJson;
-        }
-
         return json;
     }
 
@@ -136,10 +165,9 @@ public:
             ~api;
     }
 
-    /// Loads a model from this endpoint, optionally creating it if not cached.
     Model load(string name = null, 
         string owner = "organization_owner", 
-        Options options = Options.init,
+        JSONValue options = JSONValue.emptyObject,
         JSONValue[] messages = [])
     {
         if (name != null && available.filter!(m => m.name == name).empty)
@@ -153,6 +181,26 @@ public:
         Model m = name in models 
             ? models[name] 
             : (models[name] = Model(this, name, owner, options, messages));
+        return m;
+    }
+
+    /// Loads a model from this endpoint, optionally creating it if not cached.
+    Model load(string name = null, 
+        string owner = "organization_owner", 
+        OpenAI.Options options = OpenAI.Options.init,
+        JSONValue[] messages = [])
+    {
+        if (name != null && available.filter!(m => m.name == name).empty)
+            throw new ModelException(
+                "model_not_found", 
+                "Model is not available.", 
+                "model", 
+                "invalid_request_error"
+            );
+
+        Model m = name in models 
+            ? models[name] 
+            : (models[name] = Model(this, name, owner, options.toJSON(), messages));
         return m;
     }
 
@@ -180,15 +228,14 @@ public:
     }
 
     /// Requests a streaming completion from '/v1/chat/completions' for `model'.
-    ResponseStream stream(void delegate(Response) callback)(Model model)
+    ResponseStream stream(Model model, void delegate(Response) callback)
     {
-        if (!supportsStreaming)
-            throw new ModelException(
-                "not_supported", 
-                "Streaming is not supported by this model.", 
-                "streaming", 
-                "invalid_request_error"
-            );
+        // throw new ModelException(
+        //     "not_supported", 
+        //     "Streaming is not supported by this model.", 
+        //     "streaming", 
+        //     "invalid_request_error"
+        // );
 
         model.sanity();
         JSONValue json = buildRequest(model, true);
@@ -236,10 +283,8 @@ public:
                         stream.callback(response);
                 }
                 catch (Exception e)
-                {
                     // Skip malformed JSON chunks
                     continue;
-                }
             }
             
             return data.length; 
@@ -251,27 +296,13 @@ public:
     /// Requests a legacy completion from `/v1/completions` for `model`.
     Response legacyCompletions(Model model)
     {
-        JSONValue json = JSONValue.emptyObject;
+        JSONValue json = model._options;
         json.object["model"] = JSONValue(model.name);
         json.object["prompt"] = JSONValue(model.messages[$-1]["content"]);
-
-        Options options = model.options;
-        if (options.temperature !is float.nan) json.object["temperature"] = JSONValue(options.temperature);
-        if (options.topP !is float.nan) json.object["top_p"] = JSONValue(options.topP);
-        if (options.n != 0) json.object["n"] = JSONValue(options.n);
-        if (options.stop !is null) json.object["stop"] = JSONValue(options.stop);
-        if (options.presencePenalty !is float.nan) json.object["presence_penalty"] = JSONValue(options.presencePenalty);
-        if (options.frequencyPenalty !is float.nan) 
-            json.object["frequency_penalty"] = JSONValue(options.frequencyPenalty);
-        if (options.logitBias !is null) 
-            json.object["logit_bias"] = logitBias(options.logitBias);
-        json.object["max_tokens"] = JSONValue(options.maxTokens);
-        json.object["stream"] = JSONValue(false);
 
         HTTP http = HTTP(url("/v1/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        // TODO: This may be incorrect for OpenAI API endpoints, validate they use the Authorization header in this format.
         if (selectKey(model) != null)
             http.addRequestHeader("Authorization", "Bearer "~selectKey(model));
 

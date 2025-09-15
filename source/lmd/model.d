@@ -9,34 +9,6 @@ import std.array;
 import lmd.response;
 import lmd.endpoint;
 
-public struct Options
-{
-    /// Sampling temperature (higher = more random). Use `float.nan` to omit.
-    float temperature;
-    /// Nucleus sampling parameter. Use `float.nan` to omit.
-    float topP;
-    /// Number of completions to request.
-    int n = 0;
-    /// Stop sequence.
-    string stop;
-    /// Maximum number of tokens to generate. Use `-1`` to omit.
-    int maxTokens = -1;
-    /// Presence penalty scalar.
-    float presencePenalty;
-    /// Frequency penalty scalar.
-    float frequencyPenalty;
-    /// Per-token logit bias map. Keys are token ids (as strings) and values
-    /// are bias integers.
-    int[string] logitBias;
-    /// Available tools for the model to use.
-    Tool[] tools;
-    /// Tool choice configuration.
-    ToolChoice toolChoice;
-    /// Enable streaming responses.
-    //bool stream = false;
-    // TODO: Support variables and refer to think as reasoning (add reasoning effort and stuff?) (OpenAI options)
-}
-
 /// Represents a model instance associated with a specific endpoint.
 public struct Model
 {
@@ -48,16 +20,17 @@ public struct Model
     string name;
     /// The organization or owner of the model.
     string owner;
-    /// Options used for generation.
-    Options options;
     /// The message history associated with this model.
     JSONValue[] messages;
 
 package:
-    this(T)(T ep, 
+    /// Options used for generation.
+    JSONValue _options;
+
+    this(A : IEndpoint)(A ep, 
         string name = null, 
         string owner = "organization_owner", 
-        Options options = Options.init, 
+        JSONValue options = JSONValue.emptyObject,
         JSONValue[] messages = [])
     {
         if (name in ep.models)
@@ -65,7 +38,7 @@ package:
         this.ep = ep;
         this.name = name;
         this.owner = owner;
-        this.options = options;
+        this._options = options;
         this.messages = messages;
     }
 
@@ -122,7 +95,7 @@ public:
     /// Sends a streaming request and returns a ResponseStream object that can be used to get streaming data.
     /// 
     /// If `think` is false then `"/no-think"` will be appended to the user prompt.
-    ResponseStream stream(void delegate(Response) callback)(string prompt, bool think = true)
+    ResponseStream stream(string prompt, void delegate(Response) callback = null, bool think = true)
     {
         if (!think)
             prompt ~= "/no-think";
@@ -132,12 +105,13 @@ public:
         else
             messages = [message("user", prompt)];
 
-        return ep.stream!callback(this);
+        return ep.stream(this, callback);
     }
 
     /// Requests embeddings for the given text using the current model.
     Response embeddings(string prompt)
     {
+        // TODO: This actually breaks the way I do it everywhere else, but I'm not sure yet...
         messages ~= message("user", prompt);
         return ep.embeddings(this);
     }

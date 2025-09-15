@@ -256,7 +256,12 @@ public:
     Response next()
     {
         if (_commence is null)
-            throw new ModelException("not_initialized", "Stream not initialized", "stream", "invalid_request_error");
+            throw new ModelException(
+                "not_initialized", 
+                "Stream not initialized", 
+                "stream", 
+                "invalid_request_error"
+            );
         
         if (response.load() == Response.init)
             begin();
