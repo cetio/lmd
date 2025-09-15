@@ -91,10 +91,9 @@ Works with:
 - [ ] /v1/audio
 - [ ] /v1/image
 - [X] Streaming
-- [ ] Standardize no-think
-- [ ] OpenAI support
+- [ ] Standardize no-think and support OpenAI-specific Options keys
+- [ ] Modularize Options to be by-endpoint
 - [ ] Claude and Gemini support
-- [ ] Tool usage and statistics
 - [ ] Document all code with DDocs formatting
 - [ ] Support other schema than HTTP
 

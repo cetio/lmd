@@ -5,13 +5,16 @@ import lmd.model;
 import lmd.exception;
 import lmd.response;
 
-// TODO: This file is short and kind of lame.
+// TODO: code from model.d should be moved here.
+// TODO: Claude
 
 /// Represents a generic interface for interacting with a language model API endpoint.
 interface IEndpoint
 {
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
+    /// API key for this endpoint.
+    static string key;
     /// Whether this endpoint supports streaming.
     // TODO: Streaming definitely varies by endpoint and Response should be more modular.
     enum bool supportsStreaming = false;
@@ -36,8 +39,11 @@ interface IEndpoint
     /// Requests a completion from '/v1/chat/completions' for `model`.
     Response completions(Model model);
 
-    /// Requests a streaming completion from '/v1/chat/completions' for `model`.
-    void stream(void delegate(StreamChunk) F)(Model model);
+    /// Requests a streaming completion from '/v1/chat/completions' for `model'.
+    ResponseStream stream(void delegate(Response) callback)(Model model);
+
+    /// Internal function to commence streaming for a ResponseStream.
+    void _commence(ResponseStream stream);
 
     /// Requests a legacy completion from `/v1/completions` for `model`.
     Response legacyCompletions(Model model);

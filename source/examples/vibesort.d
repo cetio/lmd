@@ -10,7 +10,7 @@ T vibesort(T)(T arr, Model model)
 {
     // LLMs are a little special needs, so we do a little bit of extra formatting.
     Response resp = model.send(
-        "Sort this array and only output the array in D syntax without any code blocks or additional formatting:"~arr.to!string
+        "Sort this array and only output the array in the same syntax and format as the input:"~arr.to!string
     );
     return resp.choices[0].pick(0)
         .replace("{", "[")

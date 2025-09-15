@@ -4,6 +4,7 @@ import std.string;
 import std.json;
 import lmd.exception;
 import lmd.model;
+import mink.sync.atomic;
 
 /// Represents `finish_reason` or cause for the end of output by a model.
 enum Exit
@@ -105,8 +106,16 @@ ToolCall[] parseToolCalls(JSONValue[] toolCallsArray)
 struct Choice
 {
     Model model;
-    string think;
-    string content;
+    union
+    {
+        struct
+        {
+            string think;
+            string content;
+        }
+        // TODO:
+        //float[] embedding;
+    }
     float logprobs = float.nan;
     Exit exit = Exit.Missing;
     ToolCall[] toolCalls;
@@ -147,6 +156,13 @@ struct Choice
                 ? float.nan
                 : json["logprobs"].floating
             : float.nan;
+        
+        // if ("embedding" in json)
+        // {
+        //     embedding = new float[json["embedding"].array.length];
+        //     foreach (i, val; json["embedding"].array)
+        //         embedding[i] = val.floating;
+        // }
     }
 
     /// Picks a line from the content and chooses this choice for the model.
@@ -212,51 +228,55 @@ struct Response
     }
 }
 
-/// Represents a streaming chunk from the API.
-struct StreamChunk
+class ResponseStream
 {
-    Model model;
-    Choice[] choices;
-    ModelException exception;
-    string fingerprint;
-    string id;
-    bool done = false;
+package:
+    void delegate(ResponseStream) _commence;
 
-    this(Model model, JSONValue json)
+public:
+    Atom!Response response;
+    void delegate(Response) callback;
+    Model model;
+    JSONValue requestJson;
+
+    this(void delegate(Response) callback)
     {
-        // TODO: Consolidate with an internal object?
-        this.model = model;
-        if ("error" in json)
-        {
-            JSONValue error = json["error"].object;
-            exception = new ModelException(
-                error["code"].str, 
-                error["message"].str, 
-                error["param"].str,
-                error["type"].str
-            );
-        }
-        
-        fingerprint = "system_fingerprint" in json ? json["system_fingerprint"].str : null;
-        id = "id" in json ? json["id"].str : null;
-        
-        if ("choices" in json)
-        {
-            foreach (choice; json["choices"].array)
-            {
-                Choice item = Choice(model, choice, true);
-                if (item != Choice.init)
-                    choices ~= item;
-            }
-        }
-        
-        done = "done" in json ? json["done"].type == JSONType.true_ : false;
+        this.callback = callback;
     }
 
-    bool bubble()
+    Response next()
     {
-        if (exception !is null)
-            throw exception;
-        return true;
+        if (_commence is null)
+            throw new ModelException("not_initialized", "Stream not initialized", "stream", "invalid_request_error");
+        
+        if (response.load() == Response.init)
+            begin();
+        
+        return response.lock(() => response.load());
+    }
+    
+    Response[] collect(int n)
+    {
+        Response[] results;
+        for (int i = 0; i < n; i++)
+            results ~= next();
+        return results;
+    }
+
+    void begin()
+    {
+        _commence(this);
+    }
+
+    void begin(void delegate(Response) callback)()
+    {
+        this.callback = callback;
+        _commence(this);
+    }
+
+    Response last()
+    {
+        _commence(this);
+        return response.load();
     }
 }

@@ -34,6 +34,7 @@ public struct Options
     ToolChoice toolChoice;
     /// Enable streaming responses.
     //bool stream = false;
+    // TODO: Support variables and refer to think as reasoning (add reasoning effort and stuff?) (OpenAI options)
 }
 
 /// Represents a model instance associated with a specific endpoint.
@@ -62,7 +63,7 @@ public struct Model
         return messages;
     }
 
-    // TODO: Should this sanity check?
+    // NOTE: Should this sanity check?
     JSONValue[] choose(Choice choice) =>
         messages ~= message("assistant", choice.content);
 
@@ -124,10 +125,10 @@ public:
         return ep.completions(this);
     }
 
-    /// Sends a streaming request and yields chunks as they arrive.
+    /// Sends a streaming request and returns a ResponseStream object that can be used to get streaming data.
     /// 
     /// If `think` is false then `"/no-think"` will be appended to the user prompt.
-    void stream(void delegate(StreamChunk) F)(string prompt, bool think = true)
+    ResponseStream stream(void delegate(Response) callback)(string prompt, bool think = true)
     {
         if (!think)
             prompt ~= "/no-think";
@@ -137,6 +138,12 @@ public:
         else
             messages = [message("user", prompt)];
 
-        ep.stream!F(this);
+        return ep.stream!callback(this);
+    }
+
+    /// Requests embeddings for the given text using the current model.
+    Response embeddings(string text)
+    {
+        return ep.embeddings(text, name);
     }
 }

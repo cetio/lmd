@@ -6,16 +6,20 @@ import std.algorithm;
 import std.net.curl;
 import std.array;
 import std.json;
+import std.string;
 public import lmd.endpoint;
 public import lmd.model;
 public import lmd.response;
 import lmd.exception;
+import mink.sync.atomic;
 
 /// Represents a strongly-typed OpenAI-style model endpoint for a given scheme, address, and port.
 class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
 {
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
+    /// API key for this endpoint.
+    static string key;
     /// Whether this endpoint supports streaming.
     enum bool supportsStreaming = true;
 
@@ -101,6 +105,9 @@ package:
         return json;
     }
 
+    string selectKey(Model model) =>
+        model.key == null && model.name != null ? key : model.key;
+
 public:
     /// Builds a chat message object with the specified role and content.
     JSONValue message(string role, string content)
@@ -161,18 +168,19 @@ public:
         HTTP http = HTTP(url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        if (model.key != null)
-            http.addRequestHeader("Authorization", "Bearer "~model.key);
+        if (selectKey(model) != null)
+            http.addRequestHeader("Authorization", "Bearer "~selectKey(model));
 
         string resp;
         http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
 
-        return http.perform() == 0 ? Response(model, resp.parseJSON) : Response.init;
+        return http.perform() == 0 
+            ? Response(model, resp.strip.parseJSON) 
+            : Response(model, JSONValue.emptyObject);
     }
 
-    /// Requests a streaming completion from '/v1/chat/completions' for `model`.
-    // TODO: This is really redundant?
-    void stream(void delegate(StreamChunk) F)(Model model)
+    /// Requests a streaming completion from '/v1/chat/completions' for `model'.
+    ResponseStream stream(void delegate(Response) callback)(Model model)
     {
         if (!supportsStreaming)
             throw new ModelException(
@@ -182,53 +190,56 @@ public:
                 "invalid_request_error"
             );
 
-        // Temporarily does not do message validation. Restore later!
         model.sanity();
-
         JSONValue json = buildRequest(model, true);
 
-        // This is the worst networking I have seen in my entire life.
+        ResponseStream stream = new ResponseStream(callback);
+        stream.model = model;
+        stream.requestJson = json;
+        stream._commence = (ResponseStream rs) => _commence(rs);
+        return stream;
+    }
+
+    void _commence(ResponseStream stream)
+    {
         HTTP http = HTTP(url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
-        http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        if (model.key != null)
-            http.addRequestHeader("Authorization", "Bearer "~model.key);
+        http.setPostData(stream.requestJson.toString(JSONOptions.specialFloatLiterals), "application/json");
+        if (selectKey(stream.model) != null)
+            http.addRequestHeader("Authorization", "Bearer "~selectKey(stream.model));
 
         string buffer;
         http.onReceive((ubyte[] data) 
         { 
             buffer ~= cast(string)data;
             
-            // Process complete lines from the buffer
+            // Process complete JSON objects from the buffer
             while (true)
             {
-                size_t lineEnd = buffer.indexOf('\n');
-                if (lineEnd == size_t.max)
-                    break;
-                    
-                string line = buffer[0..lineEnd];
-                buffer = buffer[lineEnd + 1..$];
+                size_t newlinePos = buffer.indexOf('\n');
+                if (newlinePos == -1) break;
+                
+                string line = buffer[0..newlinePos];
+                buffer = buffer[newlinePos + 1..$];
                 
                 // Skip empty lines and data: prefix
-                if (line.length == 0)
-                    continue;
-                if (line.startsWith("data: "))
-                    line = line[6..$];
-                if (line == "[DONE]")
-                {
-                    onChunk(StreamChunk(JSONValue.emptyObject));
-                    return data.length;
-                }
+                if (line.length == 0) continue;
+                if (line.startsWith("data: ")) line = line[6..$];
+                if (line == "[DONE]") continue;
                 
                 try
                 {
-                    JSONValue chunkJson = line.parseJSON;
-                    StreamChunk chunk = StreamChunk(chunkJson);
-                    onChunk(chunk);
+                    JSONValue jsonChunk = line.parseJSON;
+                    Response response = Response(stream.model, jsonChunk);
+                    stream.response.store(response);
+                    if (stream.callback !is null)
+                        stream.callback(response);
                 }
-                catch (Exception)
+                catch (Exception e)
+                {
                     // Skip malformed JSON chunks
                     continue;
+                }
             }
             
             return data.length; 
@@ -260,14 +271,14 @@ public:
         HTTP http = HTTP(url("/v1/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
-        // TODO: Modularize authorization per endpoint.
-        if (model.key != null)
-            http.addRequestHeader("Authorization", "Bearer "~model.key);
+        // TODO: This may be incorrect for OpenAI API endpoints, validate they use the Authorization header in this format.
+        if (selectKey(model) != null)
+            http.addRequestHeader("Authorization", "Bearer "~selectKey(model));
 
         string resp;
         http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
 
-        return http.perform() == 0 ? Response(model, resp.parseJSON) : Response.init;
+        return http.perform() == 0 ? Response(model, resp.parseJSON) : Response(model, JSONValue.emptyObject);
     }
 
     /// Queries for the list of available models from `/v1/models`.
@@ -275,9 +286,8 @@ public:
     {
         HTTP http = HTTP(url("/v1/models"));
         http.method = HTTP.Method.get;
-        // TODO: Add authorization.
-        // if (key !is null)
-        //     http.addRequestHeader("Authorization", "Bearer "~key);
+        if (key != null)
+            http.addRequestHeader("Authorization", "Bearer "~key);
 
         string resp;
         http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
