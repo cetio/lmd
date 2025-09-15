@@ -281,6 +281,27 @@ public:
         return http.perform() == 0 ? Response(model, resp.parseJSON) : Response(model, JSONValue.emptyObject);
     }
 
+    /// Requests embeddings for the given text using the specified model.
+    Response embeddings(Model model)
+    {
+        JSONValue json = JSONValue.emptyObject;
+        json.object["model"] = JSONValue(model.name);
+        json.object["input"] = model.lastUserMessage()["content"];
+
+        HTTP http = HTTP(url("/v1/embeddings"));
+        http.method = HTTP.Method.post;
+        http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
+        if (key != null)
+            http.addRequestHeader("Authorization", "Bearer "~key);
+
+        string resp;
+        http.onReceive((ubyte[] data) { resp = cast(string)data; return data.length; });
+
+        return http.perform() == 0 
+            ? Response(model, resp.strip.parseJSON) 
+            : Response(model, JSONValue.emptyObject);
+    }
+
     /// Queries for the list of available models from `/v1/models`.
     Model[] available()
     {

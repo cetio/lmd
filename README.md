@@ -68,6 +68,19 @@ if (resp.choices[0].toolCalls.length > 0) {
 }
 ```
 
+Get embeddings:
+
+```d
+// Get embeddings for text
+Response resp = model.embeddings("Hello, world!");
+
+// Access embedding vector
+if (resp.choices.length > 0 && resp.choices[0].embedding.length > 0) {
+    float[] embedding = resp.choices[0].embedding;
+    writeln("Embedding dimensions: ", embedding.length);
+}
+```
+
 ## Endpoints
 
 Currently supports OpenAI-compatible endpoints:
@@ -75,6 +88,7 @@ Currently supports OpenAI-compatible endpoints:
 - `/v1/chat/completions` - Main chat interface
 - `/v1/completions` - Legacy completion endpoint  
 - `/v1/models` - List available models
+- `/v1/embeddings` - Text embeddings
 
 Works with:
 - OpenAI API
@@ -87,7 +101,7 @@ Works with:
 - [X] /v1/models
 - [X] /v1/completions
 - [X] /v1/chat/completions
-- [ ] /v1/embeddings
+- [x] /v1/embeddings
 - [ ] /v1/audio
 - [ ] /v1/image
 - [X] Streaming

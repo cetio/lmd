@@ -53,33 +53,6 @@ public struct Model
     /// The message history associated with this model.
     JSONValue[] messages;
 
-    /// Sets the system prompt at the beginning of the conversation.
-    JSONValue[] setSystemPrompt(string prompt)
-    {
-        if (messages.length > 0 && messages[0]["role"].str == "system")
-            messages = [message("system", prompt)]~messages[1..$];
-        else
-            messages = [message("system", prompt)]~messages;
-        return messages;
-    }
-
-    // NOTE: Should this sanity check?
-    JSONValue[] choose(Choice choice) =>
-        messages ~= message("assistant", choice.content);
-
-    /// Adds a tool message to the conversation.
-    JSONValue[] addToolMessage(string toolCallId, string content) => 
-        messages ~= ep.message("tool", content, toolCallId);
-
-    /// Converts this model into a human-readable JSON string.
-    string toString()
-    {
-        JSONValue json = JSONValue.emptyObject;
-        json["id"] = name;
-        json["owned_by"] = owner;
-        return json.toPrettyString;
-    }
-
 package:
     this(T)(T ep, 
         string name = null, 
@@ -107,6 +80,27 @@ package:
     }
 
 public:
+    /// Sets the system prompt at the beginning of the conversation.
+    JSONValue[] setSystemPrompt(string prompt)
+    {
+        if (messages.length > 0 && messages[0]["role"].str == "system")
+            messages = [message("system", prompt)]~messages[1..$];
+        else
+            messages = [message("system", prompt)]~messages;
+        return messages;
+    }
+
+    // NOTE: Should this sanity check?
+    JSONValue[] choose(Choice choice) =>
+        messages ~= message("assistant", choice.content);
+
+    /// Adds a tool message to the conversation.
+    JSONValue[] addToolMessage(string toolCallId, string content) => 
+        messages ~= ep.message("tool", content, toolCallId);
+
+    JSONValue lastUserMessage() =>
+        messages.filter!(m => m["role"].str == "user").front;
+
     /// Resets the current message stream (ignoring the first system prompt) and sends a new message
     /// using `prompt` and returns the response of the model. 
     /// 
@@ -142,8 +136,18 @@ public:
     }
 
     /// Requests embeddings for the given text using the current model.
-    Response embeddings(string text)
+    Response embeddings(string prompt)
     {
-        return ep.embeddings(text, name);
+        messages ~= message("user", prompt);
+        return ep.embeddings(this);
+    }
+
+    /// Converts this model into a human-readable JSON string.
+    string toString()
+    {
+        JSONValue json = JSONValue.emptyObject;
+        json["id"] = name;
+        json["owned_by"] = owner;
+        return json.toPrettyString;
     }
 }

@@ -48,6 +48,10 @@ interface IEndpoint
     /// Requests a legacy completion from `/v1/completions` for `model`.
     Response legacyCompletions(Model model);
 
+    /// Requests embeddings for the given text using the specified model.
+    Response embeddings(Model model);
+    
     /// Queries for the list of available models from `/v1/models`.
     Model[] available();
+
 }

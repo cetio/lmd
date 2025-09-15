@@ -113,8 +113,7 @@ struct Choice
             string think;
             string content;
         }
-        // TODO:
-        //float[] embedding;
+        float[] embedding;
     }
     float logprobs = float.nan;
     Exit exit = Exit.Missing;
@@ -157,12 +156,12 @@ struct Choice
                 : json["logprobs"].floating
             : float.nan;
         
-        // if ("embedding" in json)
-        // {
-        //     embedding = new float[json["embedding"].array.length];
-        //     foreach (i, val; json["embedding"].array)
-        //         embedding[i] = val.floating;
-        // }
+        if ("embedding" in json)
+        {
+            embedding = new float[json["embedding"].array.length];
+            foreach (i, val; json["embedding"].array)
+                embedding[i] = val.floating;
+        }
     }
 
     /// Picks a line from the content and chooses this choice for the model.
@@ -207,6 +206,16 @@ struct Response
             foreach (choice; json["choices"].array)
             {
                 Choice item = Choice(model, choice, false);
+                if (item != Choice.init)
+                    choices ~= item;
+            }
+        }
+        else if ("data" in json)
+        {
+            // Handle embeddings API response format
+            foreach (embeddingData; json["data"].array)
+            {
+                Choice item = Choice(model, embeddingData, false);
                 if (item != Choice.init)
                     choices ~= item;
             }
