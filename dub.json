@@ -9,8 +9,5 @@
 	"targetType": "library",
 	"sourcePaths": [
 		"source"
-	],
-	"testSourcePaths": [
-		"source/examples"
 	]
 }

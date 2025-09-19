@@ -164,6 +164,12 @@ struct Choice
         }
     }
 
+    string pick()
+    {
+        scope (exit) model.choose(this);
+        return content;
+    }
+
     /// Picks a line from the content and chooses this choice for the model.
     string pick(int index)
     {
@@ -172,6 +178,8 @@ struct Choice
     }
 }
 
+// TODO: Implement kind to determine the variety of response.
+// TODO: Response should be semi-agnostic to the endpoint.
 struct Response
 {
     Model model;
@@ -246,11 +254,12 @@ public:
     Atom!Response response;
     void delegate(Response) callback;
     Model model;
-    JSONValue requestJson;
 
-    this(void delegate(Response) callback)
+    this(Model model, void delegate(Response) callback)
     {
         this.callback = callback;
+        this.response = Atom!Response(Response.init);
+        this.model = model;
     }
 
     Response next()
@@ -262,9 +271,6 @@ public:
                 "stream", 
                 "invalid_request_error"
             );
-        
-        if (response.load() == Response.init)
-            begin();
         
         return response.lock(() => response.load());
     }

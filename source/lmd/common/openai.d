@@ -1,5 +1,12 @@
 module lmd.common.openai;
 
+public import lmd.endpoint;
+public import lmd.model;
+public import lmd.response;
+public import lmd.context;
+public import lmd.options;
+import lmd.exception;
+import mink.sync.atomic;
 // So many imports :(
 import std.conv;
 import std.algorithm;
@@ -7,17 +14,13 @@ import std.net.curl;
 import std.array;
 import std.json;
 import std.string;
-public import lmd.endpoint;
-public import lmd.model;
-public import lmd.response;
-import lmd.exception;
-import mink.sync.atomic;
 
 /// Represents a strongly-typed OpenAI-style model endpoint for a given scheme, address, and port.
 class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
 {
-    struct Options
+    class Options : IOptions
     {
+        alias Owner = OpenAI;
         /// Sampling temperature (higher = more random). Use `float.nan` to omit.
         float temperature;
         /// Nucleus sampling parameter. Use `float.nan` to omit.
@@ -40,7 +43,7 @@ class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
         /// Tool choice configuration.
         ToolChoice toolChoice;
         /// Enable streaming responses.
-        //bool stream = false;
+        bool stream = false;
         // TODO: Support variables and refer to think as reasoning (add reasoning effort and stuff?) (OpenAI options)
 
         /// Builds a JSON representation of logit bias mappings.
@@ -65,9 +68,10 @@ class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
                 json.object["frequency_penalty"] = JSONValue(frequencyPenalty);
             if (logitBias != null) 
                 json.object["logit_bias"] = calcLogitBias(logitBias);
+            json.object["stream"] = JSONValue(stream);
             json.object["max_tokens"] = JSONValue(maxTokens);
             
-            // Add tools if provided
+            // TODO: Audit tools and make sure that it all works. Make it agnostic?
             if (tools.length > 0)
             {
                 JSONValue toolsArray = JSONValue.emptyArray;
@@ -100,6 +104,57 @@ class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
         }
     }
 
+    class Context : IContext
+    {
+        alias Owner = OpenAI;
+        JSONValue[] messages;
+        
+        this(JSONValue[] messages = [])
+        {
+            this.messages = messages;
+        }
+        
+        JSONValue toJSON()
+        {
+            JSONValue json = JSONValue.emptyObject;
+            json.object["messages"] = JSONValue(messages);
+            return json;
+        }
+        
+        JSONValue completions(IOptions options)
+        {
+            JSONValue json = options.toJSON();
+            json.object["messages"] = JSONValue(messages);
+            return json;
+        }
+        
+        JSONValue embeddings(IOptions options)
+        {
+            JSONValue json = options.toJSON();
+            return json;
+        }
+        
+        void add(string role, string content, string toolCallId = null)
+        {
+            JSONValue msg = JSONValue.emptyObject;
+            msg.object["role"] = JSONValue(role);
+            msg.object["content"] = JSONValue(content);
+            if (toolCallId != null)
+                msg.object["tool_call_id"] = JSONValue(toolCallId);
+            messages ~= msg;
+        }
+        
+        JSONValue[] getMessages()
+        {
+            return messages;
+        }
+        
+        void clear()
+        {
+            messages = [];
+        }
+    }
+
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
     /// API key for this endpoint.
@@ -124,39 +179,10 @@ package:
         return ret;
     }
 
-    /// Builds the JSON request for completions.
-    JSONValue buildRequest(Model model, bool streaming = false)
-    {
-        JSONValue json = model._options;
-        json.object["model"] = JSONValue(model.name);
-        json.object["messages"] = model.messages;
-        json.object["stream"] = JSONValue(streaming);
-        return json;
-    }
-
     string selectKey(Model model) =>
         model.key == null && model.name != null ? key : model.key;
 
 public:
-    /// Builds a chat message object with the specified role and content.
-    JSONValue message(string role, string content)
-    {
-        JSONValue json = JSONValue.emptyObject;
-        json.object["role"] = role;
-        json.object["content"] = content;
-        return json;
-    }
-
-    /// Builds a tool message object with the specified content and tool call ID.
-    JSONValue message(string role, string content, string toolCallId)
-    {
-        JSONValue json = JSONValue.emptyObject;
-        json.object["role"] = role;
-        json.object["content"] = content;
-        json.object["tool_call_id"] = toolCallId;
-        return json;
-    }
-
     /// Creates a string URL for the provided API query using the current endpoint scheme, address, and port.
     string url(string api)
     {
@@ -167,8 +193,8 @@ public:
 
     Model load(string name = null, 
         string owner = "organization_owner", 
-        JSONValue options = JSONValue.emptyObject,
-        JSONValue[] messages = [])
+        IOptions options = null,
+        IContext context = null)
     {
         if (name != null && available.filter!(m => m.name == name).empty)
             throw new ModelException(
@@ -178,39 +204,23 @@ public:
                 "invalid_request_error"
             );
 
-        Model m = name in models 
-            ? models[name] 
-            : (models[name] = Model(this, name, owner, options, messages));
-        return m;
-    }
-
-    /// Loads a model from this endpoint, optionally creating it if not cached.
-    Model load(string name = null, 
-        string owner = "organization_owner", 
-        OpenAI.Options options = OpenAI.Options.init,
-        JSONValue[] messages = [])
-    {
-        if (name != null && available.filter!(m => m.name == name).empty)
-            throw new ModelException(
-                "model_not_found", 
-                "Model is not available.", 
-                "model", 
-                "invalid_request_error"
-            );
+        if (options is null)
+            options = new Options();
+        if (context is null)
+            context = new Context();
 
         Model m = name in models 
             ? models[name] 
-            : (models[name] = Model(this, name, owner, options.toJSON(), messages));
+            : (models[name] = Model(this, name, owner, options, context));
         return m;
     }
+
 
     /// Requests a completion from '/v1/chat/completions' for `model`.
     Response completions(Model model)
     {
-        // Temporarily does not do message validation. Restore later!
-        model.sanity();
-
-        JSONValue json = buildRequest(model, false);
+        // TODO: Sanity checks.
+        JSONValue json = model.context.completions(model.options);
 
         // This is the worst networking I have seen in my entire life.
         HTTP http = HTTP(url("/v1/chat/completions"));
@@ -237,21 +247,24 @@ public:
         //     "invalid_request_error"
         // );
 
-        model.sanity();
-        JSONValue json = buildRequest(model, true);
-
-        ResponseStream stream = new ResponseStream(callback);
-        stream.model = model;
-        stream.requestJson = json;
-        stream._commence = (ResponseStream rs) => _commence(rs);
+        ResponseStream stream = new ResponseStream(model, callback);
+        stream._commence = &_commence;
         return stream;
     }
 
     void _commence(ResponseStream stream)
     {
+        // TODO: Really ugly.....
+        bool tmp = (cast(Options)stream.model.options).stream;
+        scope (exit) (cast(Options)stream.model.options).stream = tmp;
+        // TODO: Force IOptions and IContext to be compatible with the IEndpoint.
+        (cast(Options)stream.model.options).stream = true;
+
+        JSONValue json = stream.model.context.completions(stream.model.options);
+
         HTTP http = HTTP(url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
-        http.setPostData(stream.requestJson.toString(JSONOptions.specialFloatLiterals), "application/json");
+        http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
         if (selectKey(stream.model) != null)
             http.addRequestHeader("Authorization", "Bearer "~selectKey(stream.model));
 
@@ -276,8 +289,7 @@ public:
                 
                 try
                 {
-                    JSONValue jsonChunk = line.parseJSON;
-                    Response response = Response(stream.model, jsonChunk);
+                    Response response = Response(stream.model, line.parseJSON);
                     stream.response.store(response);
                     if (stream.callback !is null)
                         stream.callback(response);
@@ -290,15 +302,28 @@ public:
             return data.length; 
         });
 
-        http.perform();
+        int result = http.perform();
+        if (result != 0 || buffer.length == 0)
+        {
+            // Create an error response if the HTTP request failed or no data received
+            JSONValue errorJson = JSONValue.emptyObject;
+            errorJson["error"] = JSONValue([
+                "code": JSONValue(result != 0 ? "connection_failed" : "no_data_received"),
+                "message": JSONValue(result != 0 ? "Failed to connect to the server" : "No data received from server"),
+                "param": JSONValue("stream"),
+                "type": JSONValue("connection_error")
+            ]);
+            Response err = Response(stream.model, errorJson);
+            stream.response.store(err);
+            if (stream.callback !is null)
+                stream.callback(err);
+        }
     }
 
     /// Requests a legacy completion from `/v1/completions` for `model`.
     Response legacyCompletions(Model model)
     {
-        JSONValue json = model._options;
-        json.object["model"] = JSONValue(model.name);
-        json.object["prompt"] = JSONValue(model.messages[$-1]["content"]);
+        JSONValue json = model.context.completions(model.options);
 
         HTTP http = HTTP(url("/v1/completions"));
         http.method = HTTP.Method.post;
@@ -315,9 +340,7 @@ public:
     /// Requests embeddings for the given text using the specified model.
     Response embeddings(Model model)
     {
-        JSONValue json = JSONValue.emptyObject;
-        json.object["model"] = JSONValue(model.name);
-        json.object["input"] = model.lastUserMessage()["content"];
+        JSONValue json = model.context.embeddings(model.options);
 
         HTTP http = HTTP(url("/v1/embeddings"));
         http.method = HTTP.Method.post;

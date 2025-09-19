@@ -2,160 +2,107 @@ module mink.sync.job;
 
 import mink.traits;
 import mink.sync.atomic;
-import core.sync.mutex;
+import mink.sync.executor;
 import core.thread;
 
-__gshared ThreadPool globalJobPool;
-
-shared static this()
+enum JobState : ubyte
 {
-    globalJobPool = new ThreadPool();
-}
-
-shared static ~this()
-{
-    globalJobPool.shutdown();
+    pending,
+    running,
+    completed,
+    failed
 }
 
 interface IJob
 {
     enum type = "undefined";
     void stub();
+    bool await();
+    JobState getState();
 }
 
+/// Lock-free job implementation with minimal memory footprint
 class Job(T) : IJob
 {
     enum type = T.stringof;
 private:
     T delegate() inner;
-    shared Mutex mutex;
-    Atom!bool completed;
+    Atom!JobState state;
+    Exception exception;
+    Atom!bool hasResult;
 
 public:
-    void stub()
-    {
-        mutex.lock();
-        scope (exit) mutex.unlock();
-        static if (!is(T == void))
-            value = inner();
-        else
-            inner();
-        completed.store(true);
-    }
-
     static if (!is(T == void))
     T value;
 
     this()
     {
-        mutex = new shared Mutex();
-        completed = Atom!bool(false);
+        state.store(JobState.pending);
+        hasResult.store(false);
     }
-    
+
+    void stub()
+    {
+        state.store(JobState.running);
+        
+        try
+        {
+            static if (!is(T == void))
+                value = inner();
+            else
+                inner();
+                
+            state.store(JobState.completed);
+        }
+        catch (Exception e)
+        {
+            exception = e;
+            state.store(JobState.failed);
+        }
+        
+        hasResult.store(true);
+    }
+
     T wait()
     {
-        // Use mutex for waiting instead of spin-wait to avoid CPU waste
-        mutex.lock();
-        scope (exit) mutex.unlock();
+        while (!hasResult.load())
+            Thread.yield();
+            
+        if (state.load() == JobState.failed)
+            throw exception;
+            
         static if (!is(T == void))
             return value;
     }
-}
 
-class Queue(T)
-{
-private:
-    T[] items;
-    Atom!size_t head;
-    Atom!size_t tail;
-    Atom!size_t count;
-
-public:
-    this(size_t capacity = 1024)
+    bool await() 
     {
-        items = new T[capacity];
-        head = Atom!size_t(0);
-        tail = Atom!size_t(0);
-        count = Atom!size_t(0);
-    }
-
-    bool tryEnqueue(T item)
-    {
-        size_t currentCount = count.load();
-        if (currentCount >= items.length)
-            return false;
+        while (!hasResult.load())
+            Thread.yield();
             
-        size_t currentTail = tail.load();
-        items[currentTail] = item;
-        tail.store((currentTail + 1) % items.length);
-        count.store(currentCount + 1);
-        return true;
+        return state.load() == JobState.completed;
     }
-
-    bool tryDequeue(ref T item)
+    
+    JobState getState() => state.load();
+    
+    void setInner(T delegate() func)
     {
-        size_t currentCount = count.load();
-        if (currentCount == 0)
-            return false;
-            
-        size_t currentHead = head.load();
-        item = items[currentHead];
-        head.store((currentHead + 1) % items.length);
-        count.store(currentCount - 1);
-        return true;
+        inner = func;
+    }
+    
+    void bubble()
+    {
+        if (state.load() == JobState.failed)
+            throw exception;
     }
 }
 
-class ThreadPool
-{
-private:
-    Queue!(IJob) queue;
-    Thread[] workers;
-    Atom!bool running;
-
-package:
-    void workerDispatch()
-    {
-        IJob job;
-        if (queue.tryDequeue(job))
-            job.stub();
-        else
-            // TODO: Eventually this should also support constant threading.
-            return;
-    }
-
-public:
-    this(size_t threads = 4)
-    {
-        queue = new Queue!(IJob)();
-        workers = new Thread[threads];
-        running = Atom!bool(true);
-        
-        for (size_t i = 0; i < threads; i++)
-            workers[i] = new Thread(&workerDispatch);
-    }
-
-    void submit(IJob job)
-    {
-        // TODO: Maybe not good?
-        foreach (worker; workers)
-        {
-            if (!worker.isRunning)
-                worker.start();
-        }
-
-        // This should never fail.
-        queue.tryEnqueue(job);
-    }
-
-    void shutdown() => running.store(false);
-}
-
+/// Submits a function for asynchronous execution and returns a Job
 auto async(alias F, ARGS...)(ARGS args)
     if (isCallable!F)
 {
     auto job = new Job!(ReturnType!(() => F(args)))();
     job.inner = () => F(args);
-    globalJobPool.submit(job);
+    getGlobalExecutor().submit(job);
     return job;
 }

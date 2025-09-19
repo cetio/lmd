@@ -16,18 +16,16 @@ import std.bitmanip;
 // else
 //     foo += 2
 // });
+// TODO: Operator overloads!!!
 shared struct Atom(T)
     if (isPOD!T && T.sizeof <= size_t.sizeof * 2)
 {
-    // TODO: Lock table should be constructed and __MODULE__ + __LINE__ will act as an identifier to query into the table for this lock.
     shared T value;
-    shared Mutex mutex;
     alias value this;
 
     this(T val)
     {
-        value = val;
-        mutex = new shared Mutex();
+        atomicStore!(MemoryOrder.seq)(value, val);
     }
 
     T load()
@@ -45,12 +43,13 @@ shared struct Atom(T)
         return cas!(MemoryOrder.seq, MemoryOrder.seq)(&value, cmp, val);
     }
 
-    auto lock(T)(T dg)
-        if (isCallable!dg)
+    // Lock-free version doesn't need mutex-based locking
+    auto lock(F)(F dg)
+        if (isCallable!F)
     {
-        mutex.lock();
-        scope (exit) mutex.unlock();
-        static if (is(ReturnType!dg == void))
+        // For lock-free types, just execute the delegate directly
+        // The user should use cmpxchg for complex operations
+        static if (is(ReturnType!F == void))
             dg();
         else
             return dg();
@@ -89,7 +88,8 @@ shared struct Atom(T)
         mutex.lock();
         scope (exit) mutex.unlock();
         bool ret = cast(T)value == cmp;
-        value = cast(shared(T))(cast(T)value == cmp ? val : cast(T)value);
+        if (ret)
+            value = cast(shared(T))val;
         return ret;
     }
 

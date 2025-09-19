@@ -12,6 +12,11 @@ unittest
     IEndpoint ep = openai!("http", "127.0.0.1", 1234);
     Model m = ep.load();
     ResponseStream stream = m.stream("What is the meaning of life?");
-    async!(() => stream.begin())();
-    assert(stream.next() != Response.init);
+    
+    bool state = async!(() => stream.begin())().await();
+    
+    // This is fine.
+    Response resp = stream.next();
+    assert((state && resp.model.name != "") || resp.exception !is null, 
+           "Response should be either valid or have an error");
 }

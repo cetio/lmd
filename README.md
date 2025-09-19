@@ -6,6 +6,9 @@ The system is modular, allowing for new Endpoints to be implemented through `IEn
 
 Streaming is designed to be intuitive and threadable using `ResponseStream` which can be blocked (forcing a wait for each iterative `Response`) or classic with a callback for incoming responses.
 
+> [!WARNING]
+> This README is likely severely outdated, as this library is rapidly changing and I simply cannot be bothered to update this README frequently.
+
 ## Use
 
 Import the library:
@@ -36,7 +39,8 @@ Response resp = model.send("What is 2+2?");
 string answer = resp.choices[0].content;
 
 // With system prompt
-model.setSystemPrompt("You are a helpful assistant.");
+model.context.clear();
+model.context.add("system", "You are a helpful assistant.");
 Response resp = model.send("Explain quantum computing briefly.");
 
 // Streaming responses
@@ -64,7 +68,7 @@ Response resp = model.send("What's the weather like?");
 // Check for tool calls
 if (resp.choices[0].toolCalls.length > 0) {
     // Handle tool execution
-    model.addToolMessage(toolCallId, result);
+    model.context.add("tool", result, toolCallId);
 }
 ```
 
@@ -106,7 +110,7 @@ Works with:
 - [ ] /v1/image
 - [X] Streaming
 - [ ] Standardize no-think and support OpenAI-specific Options keys
-- [ ] Modularize Options to be by-endpoint
+- [X] IOptions and IContext
 - [ ] Claude and Gemini support
 - [ ] Document all code with DDocs formatting
 - [ ] Support other schema than HTTP

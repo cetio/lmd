@@ -4,6 +4,8 @@ import std.json;
 import lmd.model;
 import lmd.exception;
 import lmd.response;
+import lmd.context;
+import lmd.options;
 
 // TODO: code from model.d should be moved here.
 // TODO: Claude
@@ -11,21 +13,10 @@ import lmd.response;
 /// Represents a generic interface for interacting with a language model API endpoint.
 interface IEndpoint
 {
-    struct Options
-    {
-        JSONValue toJSON();
-    }
-    
     /// Cache of loaded models keyed by their name.
     static Model[string] models;
     /// API key for this endpoint.
     static string key;
-
-    /// Creates a chat message object with the specified role and content.
-    JSONValue message(string role, string content);
-    
-    /// Creates a tool message object with the specified content and tool call ID.
-    JSONValue message(string role, string content, string toolCallId);
     
     /// Creates a string URL for the provided API query using the current endpoint scheme, address, and port.
     string url(string api);
@@ -35,8 +26,8 @@ interface IEndpoint
     /// This will send a completion to the model with no content to validate if the model may be loaded.
     Model load(string name = null, 
         string owner = "organization_owner", 
-        JSONValue options = JSONValue.emptyObject,
-        JSONValue[] messages = []);
+        IOptions options = null,
+        IContext context = null);
     
     /// Requests a completion from '/v1/chat/completions' for `model`.
     Response completions(Model model);
