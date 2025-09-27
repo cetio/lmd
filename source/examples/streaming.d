@@ -3,8 +3,8 @@ module examples.streaming;
 import std.conv;
 import std.string;
 import std.array;
+import core.thread;
 import lmd.common.openai;
-import mink.sync.job;
 
 unittest
 {
@@ -13,10 +13,12 @@ unittest
     Model m = ep.load();
     ResponseStream stream = m.stream("What is the meaning of life?");
     
-    bool state = async!(() => stream.begin())().await();
+    // Horrible test.
+    Thread streamThread = new Thread(() => stream.begin());
+    streamThread.start();
+    streamThread.join();
     
-    // This is fine.
     Response resp = stream.next();
-    assert((state && resp.model.name != "") || resp.exception !is null, 
+    assert((resp.model.name != "") || resp.exception !is null, 
            "Response should be either valid or have an error");
 }

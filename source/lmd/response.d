@@ -4,7 +4,8 @@ import std.string;
 import std.json;
 import lmd.exception;
 import lmd.model;
-import mink.sync.atomic;
+import core.atomic;
+import core.thread;
 
 /// Represents `finish_reason` or cause for the end of output by a model.
 enum Exit
@@ -251,14 +252,16 @@ package:
     void delegate(ResponseStream) _commence;
 
 public:
-    Atom!Response response;
+    Response response;
+    shared bool responseReady;
     void delegate(Response) callback;
     Model model;
 
     this(Model model, void delegate(Response) callback)
     {
         this.callback = callback;
-        this.response = Atom!Response(Response.init);
+        this.response = Response.init;
+        this.responseReady = false;
         this.model = model;
     }
 
@@ -272,7 +275,11 @@ public:
                 "invalid_request_error"
             );
         
-        return response.lock(() => response.load());
+        while (!atomicLoad!(MemoryOrder.acq)(responseReady))
+            Thread.yield();
+        
+        atomicFence!(MemoryOrder.acq);
+        return response;
     }
     
     Response[] collect(int n)
@@ -297,6 +304,26 @@ public:
     Response last()
     {
         _commence(this);
-        return response.load();
+        // Wait for response to be ready
+        while (!atomicLoad!(MemoryOrder.acq)(responseReady))
+        {
+            // Spin wait
+        }
+        
+        atomicFence!(MemoryOrder.acq);
+        return response;
+    }
+
+    // Internal method for updating the response atomically
+    package void updateResponse(Response newResponse)
+    {
+        // Update the response
+        response = newResponse;
+        
+        // Memory fence to ensure the response is written before the flag
+        atomicFence!(MemoryOrder.rel);
+        
+        // Atomically set the ready flag
+        atomicStore!(MemoryOrder.rel)(responseReady, true);
     }
 }

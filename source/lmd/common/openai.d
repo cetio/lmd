@@ -6,7 +6,7 @@ public import lmd.response;
 public import lmd.context;
 public import lmd.options;
 import lmd.exception;
-import mink.sync.atomic;
+import core.atomic;
 // So many imports :(
 import std.conv;
 import std.algorithm;
@@ -290,7 +290,7 @@ public:
                 try
                 {
                     Response response = Response(stream.model, line.parseJSON);
-                    stream.response.store(response);
+                    stream.updateResponse(response);
                     if (stream.callback !is null)
                         stream.callback(response);
                 }
@@ -314,7 +314,7 @@ public:
                 "type": JSONValue("connection_error")
             ]);
             Response err = Response(stream.model, errorJson);
-            stream.response.store(err);
+            stream.updateResponse(err);
             if (stream.callback !is null)
                 stream.callback(err);
         }
