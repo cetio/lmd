@@ -1,6 +1,6 @@
 module lmd.model;
 
-// TODO: This project uses a RIDICULOUS number of imports.
+// Note: This module requires many imports due to its central role in the library
 import std.net.curl;
 import std.conv;
 import std.algorithm;
@@ -14,7 +14,7 @@ import lmd.options;
 import lmd.exception;
 
 /// Represents a model instance associated with a specific endpoint.
-public struct Model
+struct Model
 {
     /// API key used for authentication, may be empty if not required.
     string key;
@@ -25,15 +25,15 @@ public struct Model
     /// The organization or owner of the model.
     string owner;
     /// Options for this model.
-    IOptions options;
+    Options options;
     /// Context for this model.
     IContext context;
 
 package:
-    this(IEndpoint ep, 
-        string name = null, 
-        string owner = "organization_owner", 
-        IOptions options = null,
+    this(IEndpoint ep,
+        string name = null,
+        string owner = "organization_owner",
+        Options options = Options.init,
         IContext context = null)
     {
         if (name in ep.models)
@@ -46,16 +46,11 @@ package:
     }
 
 public:
-    // TODO: Should this be in context instead?
-    /// Chooses a choice and adds it to the context.
-    void choose(Choice choice) =>
-        context.add("assistant", choice.content);
-
     /// Resets the current message stream (ignoring the first system prompt) and sends a new message
-    /// using `prompt` and returns the response of the model. 
-    // TODO: No-think mode in Options.
+    /// using `prompt` and returns the response of the model.
     Response send(string prompt)
     {
+        context.clear();
         context.add("user", prompt);
         return ep.completions(this);
     }
@@ -63,6 +58,7 @@ public:
     /// Sends a streaming request and returns a ResponseStream object that can be used to get streaming data.
     ResponseStream stream(string prompt, void delegate(Response) callback = null)
     {
+        context.clear();
         context.add("user", prompt);
         return ep.stream(this, callback);
     }
@@ -70,6 +66,7 @@ public:
     /// Requests embeddings for the given text using the current model.
     Response embeddings(string prompt)
     {
+        context.clear();
         context.add("user", prompt);
         return ep.embeddings(this);
     }

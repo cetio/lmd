@@ -3,8 +3,8 @@
 		"cet"
 	],
 	"copyright": "Copyright © 2025, cet",
-	"description": ",",
-	"license": "proprietary",
+	"description": "LM/AI library for variadic endpoints and embeddings.",
+	"license": "AGPL-3.0-only",
 	"name": "lmd",
 	"targetType": "library",
 	"sourcePaths": [

@@ -4,11 +4,14 @@ import std.string;
 import std.json;
 import lmd.exception;
 import lmd.model;
+import lmd.tool;
+import lmd.context;
 import core.atomic;
 import core.thread;
+import std.traits;
 
 /// Represents `finish_reason` or cause for the end of output by a model.
-enum Exit
+enum FinishReason
 {
     Missing = 0,
     Length = 1,
@@ -24,85 +27,41 @@ enum Exit
     Unknown = 6
 }
 
-/// Represents a tool function definition.
-struct Tool
-{
-    string type = "function";
-    string name;
-    string description;
-    JSONValue parameters;
-}
 
-/// Represents a tool call made by the model.
-struct ToolCall
-{
-    string id;
-    string type = "function";
-    string name;
-    JSONValue arguments;
-}
-
-/// Represents tool choice configuration.
-struct ToolChoice
-{
-    string type = "auto";
-    string name;
-}
-
-/// Parses a string to retrieve the representation as enum Exit.
-Exit asExit(string str)
+/// Parses a string to retrieve the representation as enum FinishReason.
+FinishReason asExit(string str)
 {
     switch (str)
     {
     case null:
-        return Exit.Missing;
+        return FinishReason.Missing;
     case "length":
-        return Exit.Length;
+        return FinishReason.Length;
     case "max_tokens":
-        return Exit.Max_Tokens;
+        return FinishReason.Max_Tokens;
     case "content_filter":
-        return Exit.Content_Filter;
+        return FinishReason.Content_Filter;
     case "refusal":
-        return Exit.Refusal;
+        return FinishReason.Refusal;
     case "tool_call":
     case "tool_use":
     case "function_call":
-        return Exit.Tool;
+        return FinishReason.Tool;
     case "pause":
-        return Exit.Pause;
+        return FinishReason.Pause;
     case "pause_turn":
-        return Exit.Pause_Turn;
+        return FinishReason.Pause_Turn;
     case "stop":
-        return Exit.Stop;
+        return FinishReason.Stop;
     case "end_turn":
-        return Exit.End_Turn;
+        return FinishReason.End_Turn;
     case "stop_sequence":
-        return Exit.Stop_Sequence;
+        return FinishReason.Stop_Sequence;
     default:
-        return Exit.Unknown;
+        return FinishReason.Unknown;
     }
 }
 
-/// Parses tool calls from a JSON array.
-ToolCall[] parseToolCalls(JSONValue[] toolCallsArray)
-{
-    ToolCall[] result;
-    foreach (toolCall; toolCallsArray)
-    {
-        ToolCall tc;
-        tc.id = "id" in toolCall ? toolCall["id"].str : "";
-        tc.type = "type" in toolCall ? toolCall["type"].str : "function";
-        if ("function" in toolCall)
-        {
-            tc.name = "name" in toolCall["function"] ? toolCall["function"]["name"].str : "";
-            tc.arguments = "arguments" in toolCall["function"] 
-                ? toolCall["function"]["arguments"] 
-                : JSONValue.emptyObject;
-        }
-        result ~= tc;
-    }
-    return result;
-}
 
 struct Choice
 {
@@ -117,16 +76,25 @@ struct Choice
         float[] embedding;
     }
     float logprobs = float.nan;
-    Exit exit = Exit.Missing;
-    ToolCall[] toolCalls;
+    FinishReason exit = FinishReason.Missing;
+    // TODO: Reconsider naming?
+    Tool[] toolCalls;
+
+    Tool[] parseToolCalls(JSONValue[] json)
+    {
+        Tool[] ret;
+        foreach (call; json)
+            ret ~= Tool(call);
+        return ret;
+    }
 
     this(Model model, JSONValue json, bool streaming = false)
     {
         this.model = model;
-        JSONValue raw = streaming && "delta" in json 
-            ? json["delta"] 
+        JSONValue raw = streaming && "delta" in json
+            ? json["delta"]
             : json["message"];
-            
+
         if ("content" in raw)
         {
             if (raw["content"].str.indexOf("<think>") != -1)
@@ -139,8 +107,7 @@ struct Choice
             else
                 content = raw["content"].str;
         }
-        
-        // Parse tool calls from the appropriate location
+
         if (streaming && "delta" in json && "tool_calls" in json["delta"])
             toolCalls = parseToolCalls(json["delta"]["tool_calls"].array);
         else if ("message" in json && "tool_calls" in json["message"])
@@ -148,15 +115,14 @@ struct Choice
         else if ("tool_calls" in json)
             // Legacy format fallback
             toolCalls = parseToolCalls(json["tool_calls"].array);
-        
-        // Parse other fields
-        exit = "finish_reason" in json ? asExit(json["finish_reason"].str) : Exit.Missing;
-        logprobs = "logprobs" in json 
+
+        exit = "finish_reason" in json ? asExit(json["finish_reason"].str) : FinishReason.Missing;
+        logprobs = "logprobs" in json
             ? json["logprobs"].isNull
                 ? float.nan
                 : json["logprobs"].floating
             : float.nan;
-        
+
         if ("embedding" in json)
         {
             embedding = new float[json["embedding"].array.length];
@@ -167,7 +133,7 @@ struct Choice
 
     string pick()
     {
-        scope (exit) model.choose(this);
+        scope (exit) model.context.choose(this);
         return content;
     }
 
@@ -179,13 +145,12 @@ struct Choice
     }
 }
 
-// TODO: Implement kind to determine the variety of response.
-// TODO: Response should be semi-agnostic to the endpoint.
+// TODO: Add response type classification (completion, embedding, etc.)
 struct Response
 {
     Model model;
     Choice[] choices;
-    ModelException exception;
+    ModelException error = null;
     long promptTokens;
     long completionTokens;
     long totalTokens;
@@ -193,23 +158,35 @@ struct Response
     string id;
     //Kind kind;
 
-    this(Model model, JSONValue json)
+    this(Model model, ModelException error)
     {
         this.model = model;
+        this.error = error;
+    }
+
+    this(F = void)(Model model, JSONValue json)
+        if (isCallable!F || is(F == void))
+    {
+        this.model = model;
+        static if (isCallable!F)
+        {
+            this = F(model, json);
+            return;
+        }
+
         if ("error" in json)
         {
-            JSONValue error = json["error"].object;
-            exception = new ModelException(
-                error["code"].str, 
-                error["message"].str, 
-                error["param"].str,
-                error["type"].str
+            this.error = new ModelException(
+                json["error"]["code"].str,
+                json["error"]["message"].str,
+                json["error"]["param"].str,
+                json["error"]["type"].str
             );
         }
-        
+
         fingerprint = "system_fingerprint" in json ? json["system_fingerprint"].str : null;
         id = "id" in json ? json["id"].str : null;
-        
+
         if ("choices" in json)
         {
             foreach (choice; json["choices"].array)
@@ -221,7 +198,6 @@ struct Response
         }
         else if ("data" in json)
         {
-            // Handle embeddings API response format
             foreach (embeddingData; json["data"].array)
             {
                 Choice item = Choice(model, embeddingData, false);
@@ -240,9 +216,9 @@ struct Response
 
     bool bubble()
     {
-        if (exception !is null)
-            throw exception;
-        return true;
+        if (error !is null)
+            throw error;
+        return choices.length > 0;
     }
 }
 
@@ -250,10 +226,10 @@ class ResponseStream
 {
 package:
     void delegate(ResponseStream) _commence;
+    shared bool flag;
 
 public:
     Response response;
-    shared bool responseReady;
     void delegate(Response) callback;
     Model model;
 
@@ -261,7 +237,7 @@ public:
     {
         this.callback = callback;
         this.response = Response.init;
-        this.responseReady = false;
+        this.flag = false;
         this.model = model;
     }
 
@@ -269,19 +245,20 @@ public:
     {
         if (_commence is null)
             throw new ModelException(
-                "not_initialized", 
-                "Stream not initialized", 
-                "stream", 
+                "not_initialized",
+                "Stream not initialized",
+                "stream",
                 "invalid_request_error"
             );
-        
-        while (!atomicLoad!(MemoryOrder.acq)(responseReady))
+
+        // NOTE: It is unlikely that this will be a problem burning CPU, since the model will probably not take too long to respond, but it could be a problem.
+        while (!atomicLoad!(MemoryOrder.acq)(flag))
             Thread.yield();
-        
+
         atomicFence!(MemoryOrder.acq);
         return response;
     }
-    
+
     Response[] collect(int n)
     {
         Response[] results;
@@ -304,26 +281,39 @@ public:
     Response last()
     {
         _commence(this);
-        // Wait for response to be ready
-        while (!atomicLoad!(MemoryOrder.acq)(responseReady))
-        {
-            // Spin wait
-        }
-        
+        while (!atomicLoad!(MemoryOrder.acq)(flag))
+            Thread.yield();
+
         atomicFence!(MemoryOrder.acq);
         return response;
     }
 
-    // Internal method for updating the response atomically
-    package void updateResponse(Response newResponse)
+    void update(Response val)
     {
-        // Update the response
-        response = newResponse;
-        
-        // Memory fence to ensure the response is written before the flag
+        if (response.choices.length > 0 && val.choices.length > 0)
+        {
+            foreach (i, choice; val.choices)
+            {
+                if (i < response.choices.length)
+                {
+                    if (choice.content.length > 0)
+                        response.choices[i].content ~= choice.content;
+                    if (choice.toolCalls.length > 0)
+                        response.choices[i].toolCalls ~= choice.toolCalls;
+                    if (choice.exit != FinishReason.Missing)
+                        response.choices[i].exit = choice.exit;
+                }
+                else
+                {
+                    response.choices ~= choice;
+                }
+            }
+        }
+        else
+        {
+            response = val;
+        }
         atomicFence!(MemoryOrder.rel);
-        
-        // Atomically set the ready flag
-        atomicStore!(MemoryOrder.rel)(responseReady, true);
+        atomicStore!(MemoryOrder.rel)(flag, true);
     }
 }

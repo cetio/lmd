@@ -13,12 +13,12 @@ unittest
     Model m = ep.load();
     ResponseStream stream = m.stream("What is the meaning of life?");
     
-    // Horrible test.
-    Thread streamThread = new Thread(() => stream.begin());
-    streamThread.start();
-    streamThread.join();
+    Thread th = new Thread(() => stream.begin());
+    th.start();
     
     Response resp = stream.next();
-    assert((resp.model.name != "") || resp.exception !is null, 
+    assert((resp.model.name != "") || resp.error !is null, 
            "Response should be either valid or have an error");
+    
+    th.join();
 }

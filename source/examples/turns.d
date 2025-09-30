@@ -6,7 +6,6 @@ import std.array;
 import std.json;
 import lmd.common.openai;
 
-/// Test simple, intuitive stateful conversations
 unittest
 {
     // Create endpoint and model
@@ -58,20 +57,4 @@ unittest
     
     string secondOption = multiLineChoice.pick(1);
     assert(secondOption == "Option 2", "Should pick the correct line");
-    
-    // Test that the API is simple and intuitive
-    // The key insight is that developers can now easily:
-    // 1. Clear context: m.context.clear()
-    // 2. Set system prompts: m.context.add("system", "...")
-    // 3. Add user messages: m.context.add("user", "...")
-    // 4. Add assistant messages: m.context.add("assistant", "...")
-    // 5. Add tool messages: m.context.add("tool", "...", "tool_id")
-    // 6. Get conversation: m.context.getMessages()
-    
-    // This is much simpler than the previous approach which required:
-    // - Manual JSON construction
-    // - Complex array manipulation
-    // - Low-level message handling
-    
-    // The API now provides a clean, intuitive interface for stateful conversations
 }

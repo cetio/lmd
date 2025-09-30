@@ -3,6 +3,7 @@ module lmd.context;
 import std.json;
 import lmd.model;
 import lmd.options;
+import lmd.response;
 
 interface IContext
 {
@@ -10,10 +11,10 @@ interface IContext
     JSONValue toJSON();
     
     /// Builds a completions request JSON with options
-    JSONValue completions(IOptions options);
+    JSONValue completions(Options options);
     
     /// Builds an embeddings request JSON with options  
-    JSONValue embeddings(IOptions options);
+    JSONValue embeddings(Options options);
     
     /// Adds a message to the conversation
     void add(string role, string content, string toolCallId = null);
@@ -23,4 +24,7 @@ interface IContext
     
     /// Clears all messages
     void clear();
+    
+    /// Chooses a choice and adds it to the context
+    void choose(Choice choice);
 }

@@ -7,8 +7,7 @@ import lmd.response;
 import lmd.context;
 import lmd.options;
 
-// TODO: code from model.d should be moved here.
-// TODO: Claude
+// TODO: Add Claude endpoint support.
 
 /// Represents a generic interface for interacting with a language model API endpoint.
 interface IEndpoint
@@ -26,7 +25,7 @@ interface IEndpoint
     /// This will send a completion to the model with no content to validate if the model may be loaded.
     Model load(string name = null, 
         string owner = "organization_owner", 
-        IOptions options = null,
+        Options options = Options.init,
         IContext context = null);
     
     /// Requests a completion from '/v1/chat/completions' for `model`.
