@@ -1,16 +1,12 @@
 module intuit.db;
 
-class VectorDB
+import lmd.model;
+
+/// A vector embedding database for storing and querying data.
+class Database
 {
-    Embedding[] embeddings;
+    float[string] local;
+    Model model;
 
-    auto query(string KIND)(
-        string query, 
-        float alpha = 0.75,
-        string augment = null,
-        // TODO: Continue parameters here.
-    )
-    {
-
-    }
+    //void add(string data) ...
 }

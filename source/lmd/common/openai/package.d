@@ -16,16 +16,13 @@ import std.array;
 import std.json;
 import std.string;
 
-/// Represents a strongly-typed OpenAI-style model endpoint for a given scheme, address, and port.
 class OpenAI(string SCHEME, string ADDRESS, uint PORT) : IEndpoint
 {
-    /// Cache of loaded models keyed by their name.
-    static Model[string] models;
-    /// API key for this endpoint.
-    static string key;
+private:
+    static Model[string] _models;
+    static string _key;
 
 package:
-    /// Converts the `/v1/models` JSON response into a list of `Model` objects.
     Model[] fromJSON(JSONValue json)
     {
         Model[] ret;
@@ -46,13 +43,38 @@ package:
     string selectKey(Model model) =>
         model.key == null && model.name != null ? key : model.key;
 
-public:
-    /// Creates a string URL for the provided API query using the current endpoint scheme, address, and port.
     string url(string api)
     {
         return SCHEME ~ "://" ~ ADDRESS
             ~ ((PORT != 0 && PORT != 80 && PORT != 443) ? ':' ~ PORT.to!string : "")
             ~ api;
+    }
+
+public:
+    ref Model[string] models() 
+        => _models;
+
+    ref string key()
+        => _key;
+
+    Model[] available()
+    {
+        HTTP http = HTTP(url("/v1/models"));
+        http.method = HTTP.Method.get;
+        if (key != null)
+            http.addRequestHeader("Authorization", "Bearer " ~ key);
+
+        string resp;
+        http.onReceive((ubyte[] data) {
+            if (data.length > 0)
+                resp = cast(string) data;
+            return data.length;
+        });
+
+        if (http.perform() == 0)
+            return fromJSON(resp.parseJSON);
+        else
+            return null;
     }
 
     Model load(string name = null,
@@ -68,23 +90,20 @@ public:
                 "invalid_request_error"
             );
 
-        if (options == Options.init)
-            options = Options();
         if (context is null)
             context = new Context();
 
-        Model m = name in models
-            ? models[name] : (models[name] = Model(this, name, owner, options, context));
+        Model m = name in _models
+            ? _models[name] 
+            : (_models[name] = Model(this, name, owner, options, context));
         return m;
     }
 
-    /// Requests a completion from '/v1/chat/completions' for `model`.
     Response completions(Model model)
     {
-        // TODO: Sanity checks.
         JSONValue json = model.context.completions(model.options);
 
-        // This is the worst networking I have seen in my entire life.
+        // TODO: Redundancy.
         HTTP http = HTTP(url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
@@ -109,16 +128,8 @@ public:
             ));
     }
 
-    /// Requests a streaming completion from '/v1/chat/completions' for `model'.
     ResponseStream stream(Model model, void delegate(Response) callback)
     {
-        // throw new ModelException(
-        //     "not_supported",
-        //     "Streaming is not supported by this model.",
-        //     "streaming",
-        //     "invalid_request_error"
-        // );
-
         ResponseStream stream = new ResponseStream(model, callback);
         stream._commence = &_commence;
         return stream;
@@ -126,24 +137,20 @@ public:
 
     void _commence(ResponseStream stream)
     {
-        // TODO: Really ugly.....
-        bool tmp = stream.model.options.get!bool("stream");
-        scope (exit) stream.model.options.set("stream", tmp);
-        stream.model.options.set("stream", true);
-
         JSONValue json = stream.model.context.completions(stream.model.options);
+        json["stream"] = JSONValue(true);
 
         HTTP http = HTTP(url("/v1/chat/completions"));
         http.method = HTTP.Method.post;
         http.setPostData(json.toString(JSONOptions.specialFloatLiterals), "application/json");
         if (selectKey(stream.model) != null)
-            http.addRequestHeader("Authorization", "Bearer " ~ selectKey(stream.model));
+            http.addRequestHeader("Authorization", "Bearer "~selectKey(stream.model));
 
         string buffer;
         http.onReceive((ubyte[] data) {
             buffer ~= cast(string) data;
 
-            // Process complete JSON objects from the buffer
+            // Process complete JSON objects from the buffer.
             while (true)
             {
                 size_t newlinePos = buffer.indexOf('\n');
@@ -192,7 +199,6 @@ public:
         }
     }
 
-    /// Requests a legacy completion from `/v1/completions` for `model`.
     Response legacyCompletions(Model model)
     {
         JSONValue json = model.context.completions(model.options);
@@ -221,7 +227,6 @@ public:
             ));
     }
 
-    /// Requests embeddings for the given text using the specified model.
     Response embeddings(Model model)
     {
         JSONValue json = model.context.embeddings(model.options);
@@ -248,27 +253,6 @@ public:
                 "embeddings",
                 "connection_error"
             ));
-    }
-
-    /// Queries for the list of available models from `/v1/models`.
-    Model[] available()
-    {
-        HTTP http = HTTP(url("/v1/models"));
-        http.method = HTTP.Method.get;
-        if (key != null)
-            http.addRequestHeader("Authorization", "Bearer " ~ key);
-
-        string resp;
-        http.onReceive((ubyte[] data) {
-            if (data.length > 0)
-                resp = cast(string) data;
-            return data.length;
-        });
-
-        if (http.perform() == 0)
-            return fromJSON(resp.parseJSON);
-        else
-            return null;
     }
 }
 

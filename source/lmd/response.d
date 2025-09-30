@@ -140,7 +140,7 @@ struct Choice
     /// Picks a line from the content and chooses this choice for the model.
     string pick(int index)
     {
-        scope (exit) model.choose(this);
+        scope (exit) model.context.choose(this);
         return content.strip.splitLines()[index];
     }
 }

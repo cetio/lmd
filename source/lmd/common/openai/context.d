@@ -7,32 +7,18 @@ import std.json;
 
 class Context : IContext
 {
-    JSONValue[] messages;
+    JSONValue[] _msgs;
 
     this(JSONValue[] messages = [])
     {
-        this.messages = messages;
+        _msgs = messages;
     }
 
-    JSONValue toJSON()
-    {
-        JSONValue json = JSONValue.emptyObject;
-        json.object["messages"] = JSONValue(messages);
-        return json;
-    }
-
-    JSONValue completions(Options options)
-    {
-        JSONValue json = options.toJSON();
-        json.object["messages"] = JSONValue(messages);
-        return json;
-    }
-
-    JSONValue embeddings(Options options)
-    {
-        JSONValue json = options.toJSON();
-        return json;
-    }
+    ref JSONValue[] messages()
+        => _msgs;
+    
+    void choose(Choice choice)
+        => add("assistant", choice.content);
 
     void add(string role, string content, string toolCallId = null)
     {
@@ -41,21 +27,25 @@ class Context : IContext
         msg.object["content"] = JSONValue(content);
         if (toolCallId != null)
             msg.object["tool_call_id"] = JSONValue(toolCallId);
-        messages ~= msg;
-    }
-
-    JSONValue[] getMessages()
-    {
-        return messages;
+        _msgs ~= msg;
     }
 
     void clear()
     {
-        messages = [];
+        _msgs = [];
     }
-    
-    void choose(Choice choice)
+
+    JSONValue completions(Options options)
     {
-        add("assistant", choice.content);
+        // TODO: Sanity checking.
+        JSONValue json = options.toJSON();
+        json.object["messages"] = JSONValue(_msgs);
+        return json;
+    }
+
+    JSONValue embeddings(Options options)
+    {
+        JSONValue json = options.toJSON();
+        return json;
     }
 }

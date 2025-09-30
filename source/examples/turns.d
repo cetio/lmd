@@ -31,7 +31,7 @@ unittest
     m.context.add("assistant", "Thank you for the weather information.");
     
     // Verify conversation state
-    JSONValue[] messages = m.context.getMessages();
+    JSONValue[] messages = m.context.messages();
     assert(messages.length >= 1, "Should have at least 1 message in conversation");
     assert(messages[0]["role"].str == "system", "First message should be system");
     

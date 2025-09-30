@@ -1,12 +1,7 @@
 module lmd.model;
 
 // Note: This module requires many imports due to its central role in the library
-import std.net.curl;
-import std.conv;
-import std.algorithm;
-import std.datetime;
 import std.json;
-import std.array;
 import lmd.response;
 import lmd.endpoint;
 import lmd.context;

@@ -1,6 +1,7 @@
 module lmd.options;
 
 import std.json;
+import std.traits;
 import lmd.tool;
 
 struct Options
