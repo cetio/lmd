@@ -6,50 +6,56 @@ import lmd.tool;
 
 struct Options
 {
-package:
-    JSONValue _json = JSONValue.emptyObject;
+    JSONValue json;
+    Tool[] tools;
+    ToolChoice toolChoice = ToolChoice.Auto;
+    string requiredTool = null;
 
-public:
-    T get(T)(string key)
+    ref T get(T)(string key)
     {
-        if (key !in _json.object)
+        // TODO: Error handling.
+        if (key !in json)
             return T.init;
 
-        auto value = _json[key];
+        auto val = json[key];
         static if (is(T == string))
-            return value.type == JSONType.string ? value.str : T.init;
+            return val.type == JSONType.string ? val.str : T.init;
         else static if (is(T == int) || is(T == long))
-            return value.type == JSONType.integer ? cast(T) value.integer : T.init;
+            return val.type == JSONType.integer ? val.integer : T.init;
         else static if (is(T == bool))
-            return (value.type == JSONType.true_ || value.type == JSONType.false_) ? value.boolean : T.init;
+            return (val.type == JSONType.true_ || val.type == JSONType.false_) ? val.boolean : T.init;
         else static if (is(T == float) || is(T == double))
-            return value.type == JSONType.float_ ? cast(T) value.floating : T.init;
+            return val.type == JSONType.float_ ? cast(T)val.floating : T.init;
         else static if (is(T == JSONValue))
-            return value;
+            return val;
         else
             return T.init;
     }
 
-    void set(T)(string key, T value)
+    T opIndexAssign(T)(string key, T val)
+    {
+        set(key, val);
+        return val;
+    }
+    
+    void set(T)(string key, T val)
     {
         static if (is(T == string))
-            _json.object[key] = JSONValue(value);
+            json[key] = JSONValue(val);
         else static if (is(T == int) || is(T == long))
-            _json.object[key] = JSONValue(cast(long) value);
+            json[key] = JSONValue(cast(long) val);
         else static if (is(T == bool))
-            _json.object[key] = JSONValue(value);
+            json[key] = JSONValue(val);
         else static if (is(T == float) || is(T == double))
-            _json.object[key] = JSONValue(cast(double) value);
+            json[key] = JSONValue(cast(double) val);
         else static if (is(T == JSONValue))
-            _json.object[key] = value;
+            json[key] = val;
         else static if (isArray!T)
         {
             JSONValue array = JSONValue.emptyArray;
-            foreach (item; value)
+            foreach (item; val)
             {
-                static if (is(typeof(item.toJSON())))
-                    array.array ~= item.toJSON();
-                else static if (is(typeof(item) == string))
+                static if (is(typeof(item) == string))
                     array.array ~= JSONValue(item);
                 else static if (is(typeof(item) == int) || is(typeof(item) == long))
                     array.array ~= JSONValue(cast(long) item);
@@ -62,45 +68,37 @@ public:
                 else
                     array.array ~= JSONValue(item.toString());
             }
-            _json.object[key] = array;
+            json[key] = array;
         }
         else static if (isAssociativeArray!T)
         {
             JSONValue obj = JSONValue.emptyObject;
-            foreach (k, v; value)
+            foreach (k, v; val)
             {
                 static if (is(typeof(v) == string))
-                    obj.object[k] = JSONValue(v);
+                    obj[k] = JSONValue(v);
                 else static if (is(typeof(v) == int) || is(typeof(v) == long))
-                    obj.object[k] = JSONValue(cast(long) v);
+                    obj[k] = JSONValue(cast(long) v);
                 else static if (is(typeof(v) == bool))
-                    obj.object[k] = JSONValue(v);
+                    obj[k] = JSONValue(v);
                 else static if (is(typeof(v) == float) || is(typeof(v) == double))
-                    obj.object[k] = JSONValue(cast(double) v);
+                    obj[k] = JSONValue(cast(double) v);
                 else static if (is(typeof(v) == JSONValue))
-                    obj.object[k] = v;
+                    obj[k] = v;
                 else
-                    obj.object[k] = JSONValue(v.toString());
+                    obj[k] = JSONValue(v.toString());
             }
-            _json.object[key] = obj;
+            json[key] = obj;
         }
         else
-            _json.object[key] = JSONValue(value.toString());
+            json[key] = JSONValue(val.toString());
     }
 
     void remove(string key)
     {
-        _json.object.remove(key);
+        json[key] = JSONValue.init;
     }
 
     bool has(string key)
-    {
-        return (key in _json.object) !is null;
-    }
-
-
-    JSONValue toJSON()
-    {
-        return _json;
-    }
+        => key !in json;
 }

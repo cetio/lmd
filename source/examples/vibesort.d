@@ -9,10 +9,10 @@ T vibesort(T)(T arr, Model model)
     if (isDynamicArray!T || isStaticArray!T)
 {
     // LLMs are a little special needs, so we do a little bit of extra formatting.
-    Response resp = model.send(
+    Response resp = model.completions(
         "Sort this array and only output the array in the same syntax and format as the input:"~arr.to!string
     );
-    return resp.choices[0].pick(0)
+    return resp.pick!string(0)
         .replace("{", "[")
         .replace("}", "]")
     .to!T;

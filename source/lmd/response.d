@@ -1,244 +1,183 @@
 module lmd.response;
 
-import std.string;
-import std.json;
-import lmd.exception;
-import lmd.model;
-import lmd.tool;
 import lmd.context;
+import lmd.model;
+import lmd.exception;
+import lmd.tool;
 import core.atomic;
 import core.thread;
-import std.traits;
+import std.string;
+import core.exception;
 
-/// Represents `finish_reason` or cause for the end of output by a model.
-enum FinishReason
+enum FinishReason : string
 {
-    Missing = 0,
-    Length = 1,
-    Max_Tokens = 1,
-    Content_Filter = 2,
-    Refusal = 2,
-    Tool = 3,
-    Pause = 3,
-    Pause_Turn = 3,
-    Stop = 4,
-    End_Turn = 4,
-    Stop_Sequence = 5,
-    Unknown = 6
+    Missing = "missing",
+    Length = "length",
+    Max_Tokens = "max_tokens",
+    ContentFilter = "content_filter",
+    Refusal = "refusal",
+    ToolCall = "tool_call",
+    ToolUse = "tool_use",
+    FunctionCall = "function_call",
+    Pause = "pause",
+    PauseTurn = "pause_turn",
+    Stop = "stop",
+    EndTurn = "end_turn",
+    StopSequence = "stop_sequence",
+    Unknown = "unknown"
 }
 
-
-/// Parses a string to retrieve the representation as enum FinishReason.
-FinishReason asExit(string str)
+enum RequestKind : string
 {
-    switch (str)
-    {
-    case null:
-        return FinishReason.Missing;
-    case "length":
-        return FinishReason.Length;
-    case "max_tokens":
-        return FinishReason.Max_Tokens;
-    case "content_filter":
-        return FinishReason.Content_Filter;
-    case "refusal":
-        return FinishReason.Refusal;
-    case "tool_call":
-    case "tool_use":
-    case "function_call":
-        return FinishReason.Tool;
-    case "pause":
-        return FinishReason.Pause;
-    case "pause_turn":
-        return FinishReason.Pause_Turn;
-    case "stop":
-        return FinishReason.Stop;
-    case "end_turn":
-        return FinishReason.End_Turn;
-    case "stop_sequence":
-        return FinishReason.Stop_Sequence;
-    default:
-        return FinishReason.Unknown;
-    }
+    Unknown = "unknown",
+    
+    ChatCompletions = "chat.completions",
+    ChatCompletion = "chat.completion",
+    ChatCompletionChunk = "chat.completion.chunk",
+    Completion = "completion",
+
+    Embedding = "value",
+    DataList = "list",
+
+    File = "file",
+    FileContent = "file.content",
+    FileSearch = "file.search",
+
+    Image = "image",
+    ImageEdit = "image.edit",
+
+    Transcription = "transcription",
+    RealtimeTranscription = "realtime.transcription_session",
+    AudioBuffer = "audio.buffer",
+
+    Conversation = "conversation",
+    Message = "message",
+    MessageDelta = "message.delta",
+    OutputAudioBuffer = "output_audio_buffer",
+
+    Batch = "batch",
+    BatchCompleted = "batch.completed",
+    WebhookEvent = "webhook_event",
+    Webhook = "webhook",
+
+    Model = "model",
+    Engine = "engine",
+    Deployment = "deployment",
 }
 
+struct Embedding
+{
+    size_t index;
+    float[] value;
+}
 
 struct Choice
 {
-    Model model;
-    union
+    Context context;
+    string reasoning;
+    float logprobs;
+    FinishReason finishReason;
+    
+    string text(size_t index = 0)
     {
-        struct
-        {
-            string think;
-            string content;
-        }
-        float[] embedding;
+        if (index >= context.messages.length)
+            throw new RangeError();
+        Message msg = context.messages[index];
+        return msg.isText() ? msg.text() : null;
     }
-    float logprobs = float.nan;
-    FinishReason exit = FinishReason.Missing;
-    // TODO: Reconsider naming?
-    Tool[] toolCalls;
-
-    Tool[] parseToolCalls(JSONValue[] json)
+    
+    Tool tool(size_t index = 0)
     {
-        Tool[] ret;
-        foreach (call; json)
-            ret ~= Tool(call);
-        return ret;
-    }
-
-    this(Model model, JSONValue json, bool streaming = false)
-    {
-        this.model = model;
-        JSONValue raw = streaming && "delta" in json
-            ? json["delta"]
-            : json["message"];
-
-        if ("content" in raw)
-        {
-            if (raw["content"].str.indexOf("<think>") != -1)
-            {
-                content = raw["content"].str;
-
-                think = content[content.indexOf("<think>")..(content.indexOf("</think>") + 8)];
-                content = content[content.indexOf("</think>") + 8..$];
-            }
-            else
-                content = raw["content"].str;
-        }
-
-        if (streaming && "delta" in json && "tool_calls" in json["delta"])
-            toolCalls = parseToolCalls(json["delta"]["tool_calls"].array);
-        else if ("message" in json && "tool_calls" in json["message"])
-            toolCalls = parseToolCalls(json["message"]["tool_calls"].array);
-        else if ("tool_calls" in json)
-            // Legacy format fallback
-            toolCalls = parseToolCalls(json["tool_calls"].array);
-
-        exit = "finish_reason" in json ? asExit(json["finish_reason"].str) : FinishReason.Missing;
-        logprobs = "logprobs" in json
-            ? json["logprobs"].isNull
-                ? float.nan
-                : json["logprobs"].floating
-            : float.nan;
-
-        if ("embedding" in json)
-        {
-            embedding = new float[json["embedding"].array.length];
-            foreach (i, val; json["embedding"].array)
-                embedding[i] = val.floating;
-        }
-    }
-
-    string pick()
-    {
-        scope (exit) model.context.choose(this);
-        return content;
-    }
-
-    /// Picks a line from the content and chooses this choice for the model.
-    string pick(int index)
-    {
-        scope (exit) model.context.choose(this);
-        return content.strip.splitLines()[index];
+        if (index >= context.messages.length)
+            throw new RangeError();
+        Message msg = context.messages[index];
+        return msg.isTool() ? msg.tool() : Tool.init;
     }
 }
 
-// TODO: Add response type classification (completion, embedding, etc.)
 struct Response
 {
     Model model;
-    Choice[] choices;
-    ModelException error = null;
+    Exception error = null;
+    RequestKind kind;
+    union
+    {
+        Choice[] choices;
+        Embedding[] embeddings;
+    }
     long promptTokens;
     long completionTokens;
     long totalTokens;
     string fingerprint;
     string id;
-    //Kind kind;
 
-    this(Model model, ModelException error)
+    this(Model model, Exception error)
     {
         this.model = model;
         this.error = error;
-    }
-
-    this(F = void)(Model model, JSONValue json)
-        if (isCallable!F || is(F == void))
-    {
-        this.model = model;
-        static if (isCallable!F)
-        {
-            this = F(model, json);
-            return;
-        }
-
-        if ("error" in json)
-        {
-            this.error = new ModelException(
-                json["error"]["code"].str,
-                json["error"]["message"].str,
-                json["error"]["param"].str,
-                json["error"]["type"].str
-            );
-        }
-
-        fingerprint = "system_fingerprint" in json ? json["system_fingerprint"].str : null;
-        id = "id" in json ? json["id"].str : null;
-
-        if ("choices" in json)
-        {
-            foreach (choice; json["choices"].array)
-            {
-                Choice item = Choice(model, choice, false);
-                if (item != Choice.init)
-                    choices ~= item;
-            }
-        }
-        else if ("data" in json)
-        {
-            foreach (embeddingData; json["data"].array)
-            {
-                Choice item = Choice(model, embeddingData, false);
-                if (item != Choice.init)
-                    choices ~= item;
-            }
-        }
-
-        if ("usage" in json)
-        {
-            promptTokens = json["usage"]["prompt_tokens"].integer;
-            completionTokens = json["usage"]["completion_tokens"].integer;
-            totalTokens = json["usage"]["total_tokens"].integer;
-        }
     }
 
     bool bubble()
     {
         if (error !is null)
             throw error;
-        return choices.length > 0;
+        return choices.length > 0 || embeddings.length > 0;
     }
+
+    T pick(T)(size_t index = 0)
+        if (is(T == Choice) || is(T == Embedding) || is(T == string) || is(T == float[]))
+    {
+        static if (is(T == Choice))
+        {
+            if (index >= choices.length)
+                throw new RangeError();
+
+            if (kind != RequestKind.ChatCompletionChunk)
+                model.context.merge(choices[index].context);
+
+            return choices[index];
+        }
+        else static if (is(T == Embedding))
+        {
+            if (index >= embeddings.length)
+                throw new RangeError();
+            return embeddings[index];
+        }
+        else static if (is(T == string))
+            return pick!Choice(index).text();
+        else static if (is(T == float[]))
+            return pick!Embedding(index).value;
+    }
+
+    T pick(T)()
+        if (is(T == Choice) || is(T == Embedding) || is(T == string) || is(T == float[]))
+        => pick!T(0);
 }
 
 class ResponseStream
 {
 package:
     void delegate(ResponseStream) _commence;
-    shared bool flag;
+    Response[] responses;
+    shared size_t length;
+    shared size_t index;
+    shared bool writer;
 
 public:
-    Response response;
-    void delegate(Response) callback;
+    // TODO: This feels bloated especially having Model everywhere.
     Model model;
+    bool complete;
+    void delegate(Response) callback;
 
     this(Model model, void delegate(Response) callback)
     {
-        this.callback = callback;
-        this.response = Response.init;
-        this.flag = false;
         this.model = model;
+        this.callback = callback;
+        this.responses = null;
+        this.length = 0;
+        this.index = 0;
+        this.writer = false;
+        this.complete = false;
     }
 
     Response next()
@@ -251,20 +190,28 @@ public:
                 "invalid_request_error"
             );
 
-        // NOTE: It is unlikely that this will be a problem burning CPU, since the model will probably not take too long to respond, but it could be a problem.
-        while (!atomicLoad!(MemoryOrder.acq)(flag))
+        while (atomicLoad!(MemoryOrder.acq)(writer))
             Thread.yield();
 
+        size_t cur = atomicFetchAdd!(MemoryOrder.seq)(index, 1);
+        
+        while (cur >= atomicLoad!(MemoryOrder.acq)(length))
+        {
+            if (complete)
+                return responses[atomicLoad!(MemoryOrder.acq)(length) - 1];
+            Thread.yield();
+        }
+        
         atomicFence!(MemoryOrder.acq);
-        return response;
+        return responses[cur];
     }
 
-    Response[] collect(int n)
+    Response[] collect(size_t count)
     {
-        Response[] results;
-        for (int i = 0; i < n; i++)
-            results ~= next();
-        return results;
+        Response[] ret;
+        foreach (i; 0 .. count)
+            ret ~= next();
+        return ret;
     }
 
     void begin()
@@ -272,48 +219,17 @@ public:
         _commence(this);
     }
 
-    void begin(void delegate(Response) callback)()
-    {
-        this.callback = callback;
-        _commence(this);
-    }
-
-    Response last()
-    {
-        _commence(this);
-        while (!atomicLoad!(MemoryOrder.acq)(flag))
-            Thread.yield();
-
-        atomicFence!(MemoryOrder.acq);
-        return response;
-    }
-
     void update(Response val)
     {
-        if (response.choices.length > 0 && val.choices.length > 0)
-        {
-            foreach (i, choice; val.choices)
-            {
-                if (i < response.choices.length)
-                {
-                    if (choice.content.length > 0)
-                        response.choices[i].content ~= choice.content;
-                    if (choice.toolCalls.length > 0)
-                        response.choices[i].toolCalls ~= choice.toolCalls;
-                    if (choice.exit != FinishReason.Missing)
-                        response.choices[i].exit = choice.exit;
-                }
-                else
-                {
-                    response.choices ~= choice;
-                }
-            }
-        }
-        else
-        {
-            response = val;
-        }
+        atomicStore!(MemoryOrder.rel)(writer, true);
         atomicFence!(MemoryOrder.rel);
-        atomicStore!(MemoryOrder.rel)(flag, true);
+        
+        // TODO: Adding responses to a queue is incredibly memory inefficient.
+        //       Also doesn't have continuity which seems like a problem.
+        responses ~= val;
+        atomicFetchAdd!(MemoryOrder.rel)(length, 1);
+        
+        atomicFence!(MemoryOrder.rel);
+        atomicStore!(MemoryOrder.rel)(writer, false);
     }
 }

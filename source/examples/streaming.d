@@ -5,20 +5,20 @@ import std.string;
 import std.array;
 import core.thread;
 import lmd.common.openai;
+import std.functional;
+import std.stdio;
 
 unittest
 {
+    assert(false);
     // LMStudio 127.0.0.1
-    IEndpoint ep = openai!("http", "127.0.0.1", 1234);
-    Model m = ep.load();
-    ResponseStream stream = m.stream("What is the meaning of life?");
+    // IEndpoint ep = openai!("http", "127.0.0.1", 1234);
+    // Model m = ep.load();
+    // ResponseStream stream = m.stream("What is the meaning of life?", (resp) => writeln(resp.choices[0]));
+    // stream.begin();
     
-    Thread th = new Thread(() => stream.begin());
-    th.start();
+    // Thread th = new Thread(() => stream.begin());
+    // th.start();
     
-    Response resp = stream.next();
-    assert((resp.model.name != "") || resp.error !is null, 
-           "Response should be either valid or have an error");
-    
-    th.join();
+    // th.join();
 }

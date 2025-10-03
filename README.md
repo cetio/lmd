@@ -35,13 +35,13 @@ Send messages and get responses:
 
 ```d
 // Simple completion
-Response resp = model.send("What is 2+2?");
+Response resp = model.completions("What is 2+2?");
 string answer = resp.choices[0].content;
 
 // With system prompt
 model.context.clear();
 model.context.add("system", "You are a helpful assistant.");
-Response resp = model.send("Explain quantum computing briefly.");
+Response resp = model.completions("Explain quantum computing briefly.");
 
 // Streaming responses
 model.stream((StreamChunk chunk) {
@@ -63,7 +63,7 @@ Options opts;
 opts.tools = tools;
 
 Model model = ep.load("model-name", "owner", opts);
-Response resp = model.send("What's the weather like?");
+Response resp = model.completions("What's the weather like?");
 
 // Check for tool calls
 if (resp.choices[0].toolCalls.length > 0) {
@@ -108,9 +108,6 @@ Works with:
 - [x] /v1/embeddings
 - [ ] /v1/audio
 - [ ] /v1/image
-- [X] Streaming
-- [ ] Standardize no-think and support OpenAI-specific Options keys
-- [X] IOptions and IContext
 - [ ] Claude and Gemini support
 - [ ] Document all code with DDocs formatting
 - [ ] Support other schema than HTTP

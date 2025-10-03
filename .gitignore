@@ -14,5 +14,5 @@ lmd-test-*
 *.o
 *.obj
 *.lst
-liblmd.a
-lmd-test*
+*.a
+*-test*

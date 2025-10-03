@@ -9,43 +9,28 @@ enum ToolChoice
     Required
 }
 
+void add(ref Tool[] arr, Tool tool)
+{
+    arr ~= tool;
+}
+
+void add(ref Tool[] arr, string name, string description, JSONValue parameters = JSONValue.emptyObject)
+{
+    arr ~= Tool(name, description, parameters);
+}
+
 struct Tool
 {
+    string id = null;
     string type = "function";
     string name;
     string description;
-    JSONValue parameters;
-
-    // Call-specific fields.
-    string id = "";
-    JSONValue arguments;
-
-package:
-    // TODO: Verify that the library is safe.
-    // TODO: Tool workflows using D functions.
-    this(JSONValue json)
+    union
     {
-        id = "id" in json ? json["id"].str : "";
-        type = "type" in json ? json["type"].str : "function";
-        if ("function" in json)
-        {
-            name = "name" in json["function"] ? json["function"]["name"].str : "";
-            if ("arguments" in json["function"])
-            {
-                auto args = json["function"]["arguments"];
-                if (args.type == JSONType.string)
-                    arguments = parseJSON(args.str);
-                else
-                    arguments = args;
-            }
-            else
-            {
-                arguments = JSONValue.emptyObject;
-            }
-        }
+        JSONValue parameters;
+        JSONValue arguments;
     }
 
-public:
     this(string name, string description, JSONValue parameters = JSONValue.emptyObject)
     {
         this.name = name;
@@ -64,6 +49,7 @@ public:
 
     T argument(T)(string key) const
     {
+        // TODO: Error handling.
         if (key !in arguments.object)
             return T.init;
 
@@ -81,71 +67,4 @@ public:
             return T.init;
     }
 
-
-    JSONValue toJSON() const
-    {
-        if (isCall())
-        {
-            JSONValue json = JSONValue.emptyObject;
-            json.object["id"] = JSONValue(id);
-            json.object["type"] = JSONValue(type);
-            json.object["function"] = JSONValue.emptyObject;
-            json.object["function"].object["name"] = JSONValue(name);
-            json.object["function"].object["arguments"] = arguments;
-            return json;
-        }
-        else
-        {
-            JSONValue json = JSONValue.emptyObject;
-            json.object["type"] = JSONValue(type);
-            json.object["function"] = JSONValue.emptyObject;
-            json.object["function"].object["name"] = JSONValue(name);
-            json.object["function"].object["description"] = JSONValue(description);
-            json.object["function"].object["parameters"] = parameters;
-            return json;
-        }
-    }
-}
-
-struct ToolRegistry
-{
-    Tool[] tools;
-    ToolChoice toolChoice = ToolChoice.Auto;
-    string requiredTool = "";
-
-    Tool[] add(Tool tool) =>
-        tools ~= tool;
-
-    Tool[] add(string name, string description, JSONValue parameters = JSONValue.emptyObject) =>
-        tools ~= Tool(name, description, parameters);
-
-    JSONValue toJSON() const
-    {
-        if (toolChoice == ToolChoice.Auto)
-            return JSONValue.init;
-        else if (toolChoice == ToolChoice.None)
-            return JSONValue("none");
-        else if (toolChoice == ToolChoice.Required)
-        {
-            JSONValue json = JSONValue.emptyObject;
-            json.object["type"] = JSONValue("function");
-            json.object["function"] = JSONValue.emptyObject;
-            json.object["function"].object["name"] = JSONValue(requiredTool);
-            return json;
-        }
-        return JSONValue.init;
-    }
-
-    package JSONValue getToolsJSON() const
-    {
-        if (tools.length == 0)
-            return JSONValue.init;
-
-        JSONValue toolsArray = JSONValue.emptyArray;
-        foreach (tool; tools)
-        {
-            toolsArray.array ~= tool.toJSON();
-        }
-        return toolsArray;
-    }
 }
