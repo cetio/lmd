@@ -49,22 +49,19 @@ struct Tool
 
     T argument(T)(string key) const
     {
-        // TODO: Error handling.
         if (key !in arguments.object)
             return T.init;
 
-        auto arg = arguments[key];
+        JSONValue arg = arguments[key];
         static if (is(T == string))
             return arg.type == JSONType.string ? arg.str : T.init;
         else static if (is(T == int) || is(T == long))
             return arg.type == JSONType.integer ? cast(T) arg.integer : T.init;
         else static if (is(T == bool))
-            return (arg.type == JSONType.true_ || arg.type == JSONType.false_) ? arg.boolean
-                : T.init;
+            return (arg.type == JSONType.true_ || arg.type == JSONType.false_) ? arg.boolean : T.init;
         else static if (is(T == float) || is(T == double))
             return arg.type == JSONType.float_ ? cast(T) arg.floating : T.init;
         else
             return T.init;
     }
-
 }

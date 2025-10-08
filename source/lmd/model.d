@@ -1,53 +1,14 @@
 module lmd.model;
 
-import lmd.response;
-import lmd.endpoint;
-import lmd.context;
-import lmd.options;
-import lmd.exception;
+import lmd.tool;
 
-/// Represents a model instance associated with a specific endpoint.
-class Model
+interface IModel
 {
-    string key;
-    IEndpoint endpoint;
-    string name;
-    string owner;
-    Options options;
-    Context context;
+    ref string key();
 
-    this(IEndpoint endpoint,
-        string name = null,
-        string owner = "organization_owner",
-        Options options = Options.init,
-        Context context = Context.init)
-    {
-        this.endpoint = endpoint;
-        this.owner = owner;
-        this.name = name;
-        this.options = options;
-        this.context = context;
-        options["model"] = name;
-    }
+    ref string name();
 
-    Response completions(string prompt)
-    {
-        context.clear();
-        context.add("user", prompt);
-        return endpoint.completions(this);
-    }
+    ref string owner();
 
-    Response embeddings(string prompt)
-    {
-        context.clear();
-        context.add("user", prompt);
-        return endpoint.embeddings(this);
-    }
-
-    ResponseStream stream(string prompt, void delegate(Response) callback = null)
-    {
-        context.clear();
-        context.add("user", prompt);
-        return endpoint.stream(this, callback);
-    }
+    ref Tool[] tools();
 }

@@ -1,120 +1,140 @@
 # LMD
 
-LMD is a library for interfacing with LLM APIs. Connect to OpenAI, LMStudio, or any compatible endpoint. Send messages, get responses, manage conversations.
+D library for interfacing with LLM APIs. Connect to OpenAI, LMStudio, or any OpenAI-compatible endpoint through:
+- `/v1/chat/completions`
+- `/v1/embeddings`
+- `/v1/models`
 
-The system is modular, allowing for new Endpoints to be implemented through `IEndpoint` and supporting common API out of the box.
+Built-in support for other providers like Claude and Gemini are planned, but have not yet been implemented. LMD allows for defining new models and endpoints easily and building off of existing endpoints.
 
-Streaming is designed to be intuitive and threadable using `ResponseStream` which can be blocked (forcing a wait for each iterative `Response`) or classic with a callback for incoming responses.
-
-> [!WARNING]
-> This README is likely severely outdated, as this library is rapidly changing and I simply cannot be bothered to update this README frequently.
-
-## Use
-
-Import the library:
+## Quick Start
 
 ```d
-import lmd;
-// Or for specifically OpenAI-style endpoints:
 import lmd.common.openai;
+import lmd.endpoint;
+
+IEndpoint ep = cast(IEndpoint)(new OpenAI("http", "127.0.0.1", 1234));
+Response resp = ep.complete!"gpt-oss"("What is 2+2?");
+string answer = resp.select!string();
 ```
 
-Create an endpoint and load a model:
+## Usage
+
+### Endpoints
 
 ```d
-// Connect to LMStudio running locally
-IEndpoint ep = openai!("http", "127.0.0.1", 1234);
-Model model = ep.load();
+import lmd.common.openai;
 
-// Or connect to OpenAI
-IEndpoint openai = openai!("https", "api.openai.com", 443);
-Model gpt4 = openai.load("gpt-4", "your-api-key");
+// Local LMStudio
+IEndpoint ep = cast(IEndpoint)(new OpenAI("http", "127.0.0.1", 1234));
+
+// OpenAI API
+IEndpoint openai = cast(IEndpoint)(new OpenAI("https", "api.openai.com", 443, "your-api-key"));
 ```
 
-Send messages and get responses:
+### Completions
 
 ```d
-// Simple completion
-Response resp = model.completions("What is 2+2?");
-string answer = resp.choices[0].content;
+import lmd.endpoint;
+import lmd.context;
 
-// With system prompt
-model.context.clear();
-model.context.add("system", "You are a helpful assistant.");
-Response resp = model.completions("Explain quantum computing briefly.");
+// Simple text
+Response resp = ep.complete!"gpt-4"("Explain quantum computing");
+string text = resp.select!string();
 
-// Streaming responses
-model.stream((StreamChunk chunk) {
-    foreach (choice; chunk.choices) {
-        write(choice.content);
-    }
-})("Tell me a story");
+// With conversation context
+Context ctx;
+ctx.add(Role.System, "You are a helpful assistant");
+ctx.add(Role.User, "What is the capital of France?");
+Response resp = ep.complete!"gpt-4"(ctx);
 ```
 
-Handle tool calls:
+### Model Configuration
 
 ```d
-// Define tools
-Tool[] tools = [
-    Tool("function", "get_weather", "Get current weather", /* parameters */)
-];
+import lmd.model;
 
-Options opts;
-opts.tools = tools;
+IModel model = ep.fetch("gpt-4");
+model.temperature = 0.7;
+model.maxTokens = 500;
 
-Model model = ep.load("model-name", "owner", opts);
-Response resp = model.completions("What's the weather like?");
+// Options applied automatically to requests
+Response resp = ep.complete!"gpt-4"("Hello!");
+```
 
-// Check for tool calls
-if (resp.choices[0].toolCalls.length > 0) {
-    // Handle tool execution
-    model.context.add("tool", result, toolCallId);
+### Tools
+
+```d
+import std.json;
+import lmd.tool;
+
+IModel model = ep.fetch("gpt-4");
+
+JSONValue params = parseJSON(`{
+    "type": "object",
+    "properties": {
+        "city": {"type": "string", "description": "City name"}
+    },
+    "required": ["city"]
+}`);
+
+model.tools().add("get_weather", "Get current weather", params);
+
+Response resp = ep.complete!"gpt-4"("What's the weather in Paris?");
+Completion comp = resp.select!Completion();
+
+if (comp.context.messages[0].isTool())
+{
+    Tool toolCall = comp.context.messages[0].tool();
+    string city = toolCall.argument!string("city");
 }
 ```
 
-Get embeddings:
+### Streaming
 
 ```d
-// Get embeddings for text
-Response resp = model.embeddings("Hello, world!");
-
-// Access embedding vector
-if (resp.choices.length > 0 && resp.choices[0].embedding.length > 0) {
-    float[] embedding = resp.choices[0].embedding;
-    writeln("Embedding dimensions: ", embedding.length);
-}
+ResponseStream stream = ep.stream("gpt-4", "Tell me a story");
+stream.callback = (Response resp) {
+    string text = resp.select!string();
+    write(text);
+};
+// Calling `begin` starts the streaming.
+// Callback will be used if it was provided, otherwise you may use `next()`, `last()`, and `collect(size_t)`
+stream.begin();
 ```
 
-## Endpoints
+### Embeddings
 
-Currently supports OpenAI-compatible endpoints:
+```d
+Response resp = ep.embed!"text-embedding-ada-002"("Hello, world!");
+float[] vector = resp.select!Embedding().value;
+```
 
-- `/v1/chat/completions` - Main chat interface
-- `/v1/completions` - Legacy completion endpoint  
-- `/v1/models` - List available models
-- `/v1/embeddings` - Text embeddings
+## Architecture
 
-Works with:
-- OpenAI API
-- LMStudio
-- Ollama
-- Any OpenAI-compatible server
+The library is endpoint-centric. Endpoints handle API communication, models are lightweight configuration handles, and context is passed as data.
+
+- `IEndpoint` - Manages HTTP requests and model availability
+- `IModel` - Holds configuration (temperature, tools, etc.)
+- `Response` - Contains `Variant data` extracted via `select!T()`
+- `Context` - Conversation messages with roles
+
+## Examples
+
+See `source/examples/` for working code:
+- `vibesort.d` - Array sorting via LLM
+- `tool.d` - Function calling
 
 ## Roadmap
 
-- [X] /v1/models
-- [X] /v1/completions
-- [X] /v1/chat/completions
-- [x] /v1/embeddings
-- [ ] /v1/audio
-- [ ] /v1/image
-- [ ] Claude and Gemini support
-- [ ] Document all code with DDocs formatting
-- [ ] Support other schema than HTTP
-
-## Contributing
-
-Please do not contribute. I don't want to review your code.
+- [x] Chat completions
+- [x] Embeddings
+- [x] Tool/function calling
+- [x] Response streaming (lock-free*) *mostly
+- [ ] Tool choice control
+- [ ] Image generation
+- [ ] Audio endpoints
+- [ ] Claude and Gemini providers
 
 ## License
 

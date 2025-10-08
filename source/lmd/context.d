@@ -16,6 +16,7 @@ enum Role : string
 struct Message
 {
     Role role;
+    // TODO: Support for string[2] responses.
     Variant content;
     
     this(Role role, Variant content)
@@ -56,8 +57,7 @@ struct Context
     
     void add(T)(Role role, T val)
     {
-        Variant var = val;
-        messages ~= Message(role, var);
+        messages ~= Message(role, Variant(val));
     }
     
     void add(T)(string role, T val)

@@ -1,31 +1,33 @@
 module lmd.endpoint;
 
-import lmd.formatter;
-import lmd.response;
+import std.variant;
 import lmd.model;
-import lmd.context;
-import lmd.options;
+import lmd.response;
+
+// TODO: Possibly revisit this?
+Response complete(string MODEL, E : IEndpoint, T)(E ep, T data)
+{
+    return ep.completions(MODEL, Variant(data));
+}
+
+Response embed(string MODEL, E : IEndpoint, T)(E ep, T data)
+{
+    return ep.embeddings(MODEL, Variant(data));
+}
 
 interface IEndpoint
 {
     ref string key();
 
-    ref Model[string] models();
+    IModel[] available();
 
-    ref IFormatter formatter();
+    IModel fetch(string model);
 
-    Model[] available();
+    Response completions(string model, Variant data);
 
-    Model load(string name = null, 
-        string owner = "organization_owner", 
-        Options options = Options.init,
-        Context context = Context.init);
+    // TODO: Legacy completions.
 
-    Response request(string api, Model model);
+    Response embeddings(string model, Variant data);
 
-    Response completions(Model model);
-
-    Response embeddings(Model model);
-    
-    ResponseStream stream(Model model, void delegate(Response) callback = null);
+    ResponseStream stream(string model, Variant data);
 }

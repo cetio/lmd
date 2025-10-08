@@ -1,12 +1,10 @@
 module lmd.response;
 
+import std.variant;
+import std.json;
 import lmd.context;
-import lmd.model;
-import lmd.exception;
-import lmd.tool;
 import core.atomic;
 import core.thread;
-import std.string;
 import core.exception;
 
 enum FinishReason : string
@@ -27,7 +25,7 @@ enum FinishReason : string
     Unknown = "unknown"
 }
 
-enum RequestKind : string
+enum ResponseKind : string
 {
     Unknown = "unknown",
     
@@ -71,105 +69,97 @@ struct Embedding
     float[] value;
 }
 
-struct Choice
+struct Completion
 {
     Context context;
-    string reasoning;
-    float logprobs;
     FinishReason finishReason;
-    
-    string text(size_t index = 0)
-    {
-        if (index >= context.messages.length)
-            throw new RangeError();
-        Message msg = context.messages[index];
-        return msg.isText() ? msg.text() : null;
-    }
-    
-    Tool tool(size_t index = 0)
-    {
-        if (index >= context.messages.length)
-            throw new RangeError();
-        Message msg = context.messages[index];
-        return msg.isTool() ? msg.tool() : Tool.init;
-    }
+    float logProbs;
 }
 
 struct Response
 {
-    Model model;
+    string model;
     Exception error = null;
-    RequestKind kind;
-    union
-    {
-        Choice[] choices;
-        Embedding[] embeddings;
-    }
-    long promptTokens;
-    long completionTokens;
-    long totalTokens;
-    string fingerprint;
-    string id;
-
-    this(Model model, Exception error)
-    {
-        this.model = model;
-        this.error = error;
-    }
+    ResponseKind kind;
+    Variant data;
 
     bool bubble()
     {
         if (error !is null)
             throw error;
-        return choices.length > 0 || embeddings.length > 0;
+        return completions.length > 0 || embedding.value.length > 0;
     }
 
-    T pick(T)(size_t index = 0)
-        if (is(T == Choice) || is(T == Embedding) || is(T == string) || is(T == float[]))
+    Completion[] completions()
     {
-        static if (is(T == Choice))
+        if (kind == ResponseKind.ChatCompletions && data.type == typeid(Completion[]))
+            return data.get!(Completion[]);
+        throw new Exception("Response is not completions!");
+    }
+
+    Embedding embedding()
+    {
+        if (kind == ResponseKind.Embedding && data.type == typeid(Embedding))
+            return data.get!Embedding;
+        throw new Exception("Response is not an embedding!");
+    }
+
+    T select(T)(size_t index = 0)
+        if (is(T == Completion) || is(T == Embedding) || is(T == string) || is(T == float[]))
+    {
+        static if (is(T == Completion))
         {
-            if (index >= choices.length)
+            Completion[] comps = completions();
+            if (index >= comps.length)
                 throw new RangeError();
-
-            if (kind != RequestKind.ChatCompletionChunk)
-                model.context.merge(choices[index].context);
-
-            return choices[index];
+            return comps[index];
         }
         else static if (is(T == Embedding))
         {
-            if (index >= embeddings.length)
+            Embedding emb = embedding();
+            if (emb.value.length == 0)
                 throw new RangeError();
-            return embeddings[index];
+            return emb;
         }
         else static if (is(T == string))
-            return pick!Choice(index).text();
+        {
+            Completion comp = select!Completion(index);
+            if (comp.context.messages.length == 0)
+                throw new RangeError();
+            return comp.context.messages[0].text();
+        }
         else static if (is(T == float[]))
-            return pick!Embedding(index).value;
+        {
+            Embedding emb = embedding();
+            if (emb.value.length == 0)
+                throw new RangeError();
+            return emb.value;
+        }
     }
 
-    T pick(T)()
-        if (is(T == Choice) || is(T == Embedding) || is(T == string) || is(T == float[]))
-        => pick!T(0);
+    T select(T)()
+        if (is(T == Completion) || is(T == Embedding) || is(T == string) || is(T == float[]))
+        => select!T(0);
 }
 
 class ResponseStream
 {
-package:
-    void delegate(ResponseStream) _commence;
+private:
     Response[] responses;
     shared size_t length;
     shared size_t index;
     shared bool writer;
 
+package:
+    void delegate(ResponseStream) _commence;
+
 public:
-    // TODO: This feels bloated especially having Model everywhere.
-    Model model;
+    JSONValue json;
+    string model;
     bool complete;
     void delegate(Response) callback;
 
-    this(Model model, void delegate(Response) callback)
+    this(string model, void delegate(Response) callback)
     {
         this.model = model;
         this.callback = callback;
@@ -178,17 +168,13 @@ public:
         this.index = 0;
         this.writer = false;
         this.complete = false;
+        this.json = JSONValue.emptyObject;
     }
 
     Response next()
     {
         if (_commence is null)
-            throw new ModelException(
-                "not_initialized",
-                "Stream not initialized",
-                "stream",
-                "invalid_request_error"
-            );
+            throw new Exception("Stream not initialized");
 
         while (atomicLoad!(MemoryOrder.acq)(writer))
             Thread.yield();
@@ -224,8 +210,6 @@ public:
         atomicStore!(MemoryOrder.rel)(writer, true);
         atomicFence!(MemoryOrder.rel);
         
-        // TODO: Adding responses to a queue is incredibly memory inefficient.
-        //       Also doesn't have continuity which seems like a problem.
         responses ~= val;
         atomicFetchAdd!(MemoryOrder.rel)(length, 1);
         
