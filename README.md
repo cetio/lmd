@@ -1,6 +1,6 @@
 # LMD
 
-D library for interfacing with LLM APIs. Connect to OpenAI, LMStudio, or any OpenAI-compatible endpoint through:
+Library for interacting/managing language models, particularly locally, with native structures for D. Connect to OpenAI, LMStudio, or any OpenAI-compatible endpoint through:
 - `/v1/chat/completions`
 - `/v1/embeddings`
 - `/v1/models`
