@@ -16,8 +16,8 @@ unittest
     JSONValue params = parseJSON(`{
         "type": "object",
         "properties": {
-            "a": {"type": "number", "description": "First number"},
-            "b": {"type": "number", "description": "Second number"}
+            "a": {"type": "number", "desc": "First number"},
+            "b": {"type": "number", "desc": "Second number"}
         },
         "required": ["a", "b"]
     }`);

@@ -14,9 +14,9 @@ void add(ref Tool[] arr, Tool tool)
     arr ~= tool;
 }
 
-void add(ref Tool[] arr, string name, string description, JSONValue parameters = JSONValue.emptyObject)
+void add(ref Tool[] arr, string name, string desc, JSONValue parameters = JSONValue.emptyObject)
 {
-    arr ~= Tool(name, description, parameters);
+    arr ~= Tool(name: name, desc: desc, parameters: parameters);
 }
 
 struct Tool
@@ -24,18 +24,11 @@ struct Tool
     string id = null;
     string type = "function";
     string name;
-    string description;
+    string desc;
     union
     {
         JSONValue parameters;
         JSONValue arguments;
-    }
-
-    this(string name, string description, JSONValue parameters = JSONValue.emptyObject)
-    {
-        this.name = name;
-        this.description = description;
-        this.parameters = parameters;
     }
 
     bool isCall() const
@@ -45,11 +38,11 @@ struct Tool
         => id.length == 0 && name.length > 0;
 
     bool isValid() const
-        => id.length > 0 && name.length > 0 && description.length > 0;
+        => id.length > 0 && name.length > 0 && desc.length > 0;
 
     T argument(T)(string key) const
     {
-        if (key !in arguments.object)
+        if (key !in arguments)
             return T.init;
 
         JSONValue arg = arguments[key];

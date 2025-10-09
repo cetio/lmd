@@ -84,7 +84,7 @@ package:
                 t["type"] = JSONValue(tool.type);
                 t["function"] = JSONValue.emptyObject;
                 t["function"]["name"] = JSONValue(tool.name);
-                t["function"]["description"] = JSONValue(tool.description);
+                t["function"]["desc"] = JSONValue(tool.desc);
                 t["function"]["parameters"] = tool.parameters;
                 tools.array ~= t;
             }
@@ -92,6 +92,7 @@ package:
         }
 
         JSONValue messages = JSONValue.emptyArray;
+        // TODO: Better type support.
         if (data.type == typeid(Context))
         {
             Context ctx = data.get!Context;
@@ -159,9 +160,10 @@ package:
                     foreach (tc; msg["tool_calls"].array)
                     {
                         // TODO: I don't like this.
-                        Tool tool;
-                        tool.id = ("id" in tc) ? tc["id"].str : null;
-                        tool.type = ("type" in tc) ? tc["type"].str : "function";
+                        Tool tool = Tool(
+                            id: ("id" in tc) ? tc["id"].str : null, 
+                            type: ("type" in tc) ? tc["type"].str : "function"
+                        );
                         
                         if ("function" in tc)
                         {

@@ -73,7 +73,7 @@ IModel model = ep.fetch("gpt-4");
 JSONValue params = parseJSON(`{
     "type": "object",
     "properties": {
-        "city": {"type": "string", "description": "City name"}
+        "city": {"type": "string", "desc": "City name"}
     },
     "required": ["city"]
 }`);
