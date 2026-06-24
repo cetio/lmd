@@ -10,7 +10,7 @@ Intuit is a library for interacting with various AI endpoints/models, with a foc
 - **Structured Output**: JSON schema (model options) as well as JSON parsing for responses.
 - **Context Management**: System/user/assistant messages and preserved context via `Context`.
 - **Streaming Support**: SSE streaming is available for real-time completions through `streamCompletions`.
-- **Embeddings**: Embeddings with variable float sizes and SIMD math utilities.
+- **Embeddings**: Embeddings with variable float sizes.
 - **Tool Use**: Native D functions as tools with automatic JSON schema generation.
 - **Easy Integration**: Intuit is deliberately streamlined and adding/using new endpoints/models is straightforward.
 
@@ -140,15 +140,6 @@ string[] inputs = ["Hello, world!", "Goodbye, world!"];
 Embedding!float[] embs = embeddings(ep, model, inputs);
 ```
 
-SIMD-accelerated utilities are provided for vector math:
-
-```d
-import intuit.response.embedding;
-
-float similarity = cosineSimilarity(emb1.value, emb2.value);
-float[] mean = normMean([emb1.value, emb2.value]);
-```
-
 ### Tools
 
 Register native D functions as tools with automatic JSON schema generation:
@@ -169,13 +160,6 @@ Context ctx;
 ctx.user("What is the weather in Paris?");
 
 Completion result = completions(ep, model, ctx);
-```
-
-Tools marked with `autoexec = true` are invoked automatically and the conversation recurses until a text response is returned:
-
-```d
-ep.tools.add!getWeather(true);
-Completion result = completions(ep, model, ctx); // loops internally
 ```
 
 ### Routers

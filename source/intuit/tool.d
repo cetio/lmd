@@ -25,8 +25,6 @@ class Tool
     JSONValue schema;
     /// The implementation delegate invoked with parsed arguments.
     JSONValue delegate(JSONValue) impl;
-    /// Whether the tool should be executed automatically without returning to the caller.
-    bool autoexec;
 
     /**
      * Constructs a Tool.
@@ -36,15 +34,13 @@ class Tool
      *  description = The human-readable tool description.
      *  schema = The JSON schema for the tool's parameters.
      *  impl = The delegate that implements the tool.
-     *  autoexec = Whether to auto-execute the tool.
      */
-    this(string name, string description, JSONValue schema, JSONValue delegate(JSONValue) impl, bool autoexec = false)
+    this(string name, string description, JSONValue schema, JSONValue delegate(JSONValue) impl)
     {
         this.name = name;
         this.description = description;
         this.schema = schema;
         this.impl = impl;
-        this.autoexec = autoexec;
     }
 }
 
@@ -53,21 +49,15 @@ struct ToolRegistry
 {
     private Tool[string] tools;
 
-    /**
-     * Registers a D function as a tool, generating its schema automatically.
-     *
-     * Params:
-     *  autoexec = Whether the tool should be auto-executed.
-     */
-    void add(alias F)(bool autoexec = false)
+    /// Registers a D function as a tool, generating its schema automatically.
+    void add(alias F)()
         if (__traits(compiles, &F))
     {
         tools[__traits(identifier, F)] = new Tool(
             __traits(identifier, F),
             descriptionOf!F(),
             generateSchema!F(),
-            generateWrapper!F(),
-            autoexec
+            generateWrapper!F()
         );
     }
 

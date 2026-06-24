@@ -127,9 +127,6 @@ package (intuit) JSONValue request(
 /**
  * Send a completion request to the endpoint using a specific model name.
  *
- * Enables for autoexec tool use if providing a Context instance.
- * All autoexec tools are always run if requested by the model.
- *
  * Params:
  *   ep = The endpoint to send the request to.
  *   modelName = The name of the model to use.
@@ -149,30 +146,7 @@ Completion completions(E, D)(E ep, string modelName, auto ref D data)
     Completion ret = cfg.parseResponse(resp);
 
     static if (is(D == Context))
-    {
         data.assistant(ret);
-
-        Choice first = ret.choice(0);
-        bool cycle = first.toolCalls.length > 0;
-        foreach (call; first.toolCalls)
-        {
-            Tool tool = ep.tools.get(call.name);
-            cycle &= tool.autoexec;
-            if (!tool.autoexec)
-                continue;
-
-            JSONValue result;
-            try
-                result = tool.impl(call.arguments);
-            catch (Exception ex)
-                result = JSONValue("Exception: "~ex.msg);
-            string serialized = result.type == JSONType.string ? result.str : result.toString();
-            data.tool(call.id, serialized);
-        }
-
-        if (cycle)
-            return completions(ep, modelName, data);
-    }
 
     return ret;
 }

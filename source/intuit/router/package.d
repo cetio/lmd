@@ -58,8 +58,6 @@ interface IRouter
 /**
  * Send a completion request using the router's maintained context.
  *
- * All autoexec tools are always run if requested by the model.
- *
  * Params:
  *   router = The router to send the request through.
  *
@@ -78,27 +76,6 @@ Completion completions(R)(R router)
     Completion ret = cfg.parseResponse(resp);
 
     router.context.assistant(ret);
-
-    Choice first = ret.choice(0);
-    bool cycle = first.toolCalls.length > 0;
-    foreach (call; first.toolCalls)
-    {
-        Tool tool = router.tools.get(call.name);
-        cycle &= tool.autoexec;
-        if (!tool.autoexec)
-            continue;
-
-        JSONValue result;
-        try
-            result = tool.impl(call.arguments);
-        catch (Exception ex)
-            result = JSONValue("Exception: "~ex.msg);
-        string serialized = result.type == JSONType.string ? result.str : result.toString();
-        router.context.tool(call.id, serialized);
-    }
-
-    if (cycle)
-        return completions(router);
 
     return ret;
 }

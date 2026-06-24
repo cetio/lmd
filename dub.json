@@ -45,7 +45,6 @@
 		"conductor": {
 			"path": "../conductor"
 		},
-		"intel-intrinsics": "~>1.14.2",
 		"unit-threaded": "~>2.2.4"
 	},
 	"description": "SDK for interfacing with AI LLMs and embeddings models with streaming, tools, routing, and much more.",
