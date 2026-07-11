@@ -16,3 +16,4 @@ intuit-test-*
 *.lst
 libintuit*
 bin/*
+playground/*
