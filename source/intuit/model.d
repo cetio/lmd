@@ -412,7 +412,7 @@ private:
             JSONValue value = obj[key];
             if (value.type == JSONType.integer)
                 return cast(size_t)value.integer;
-            if (value.type == JSONType.uinteger)
+            else if (value.type == JSONType.uinteger)
                 return cast(size_t)value.uinteger;
         }
         return 0;
