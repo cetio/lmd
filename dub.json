@@ -4,9 +4,11 @@
 	],
 	"configurations": [
 		{
+			"excludedSourceFiles": [
+				"source/tests/*"
+			],
 			"name": "library",
-			"targetType": "library",
-			"excludedSourceFiles": ["source/tests/*"]
+			"targetType": "library"
 		},
 		{
 			"buildOptions": [
@@ -42,9 +44,7 @@
 	],
 	"copyright": "Copyright © 2026, cet",
 	"dependencies": {
-		"conductor": {
-			"path": "../conductor"
-		},
+		"conductor": "~>2.1.2",
 		"unit-threaded": "~>2.2.4"
 	},
 	"description": "SDK for interfacing with AI LLMs and embeddings models with streaming, tools, routing, and much more.",

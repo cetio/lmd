@@ -1,7 +1,7 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"conductor": {"path":"../conductor"},
+		"conductor": "2.1.2",
 		"unit-threaded": "2.2.4"
 	}
 }
