@@ -3,6 +3,7 @@ module intuit.context;
 
 public import intuit.context.message;
 public import intuit.context.compactor;
+public import intuit.context.guardrails;
 
 import conductor.serialize : toJSON;
 import intuit.response;
