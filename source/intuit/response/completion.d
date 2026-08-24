@@ -8,7 +8,7 @@ enum FinishReason : string
 {
     Missing = "missing",
     Length = "length",
-    Max_Tokens = "max_tokens",
+    MaxTokens = "max_tokens",
     ContentFilter = "content_filter",
     Refusal = "refusal",
     ToolCall = "tool_call",

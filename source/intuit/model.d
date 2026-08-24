@@ -431,7 +431,7 @@ private:
         case "length":
             return FinishReason.Length;
         case "max_tokens":
-            return FinishReason.Max_Tokens;
+            return FinishReason.MaxTokens;
         case "content_filter":
             return FinishReason.ContentFilter;
         case "refusal":

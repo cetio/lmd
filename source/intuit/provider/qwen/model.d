@@ -105,7 +105,7 @@ class QwenModelConfig : ModelConfig
         foreach (ref choice; ret.choices)
         {
             if (choice.toolCalls.length == 0 && choice.text.length > 0)
-                extractXmlToolCalls(choice);
+                extractXMLToolCalls(choice);
         }
         return ret;
     }
@@ -113,29 +113,29 @@ class QwenModelConfig : ModelConfig
 private:
     /// Attempts to extract tool calls from XML tags embedded in choice text.
     /// Supports both Qwen3-Coder custom XML and Qwen2.5+/Qwen3 JSON-in-XML formats.
-    static void extractXmlToolCalls(ref Choice choice)
+    static void extractXMLToolCalls(ref Choice choice)
     {
         if (!choice.text.canFind("<tool_call>"))
             return;
 
-        ToolCall[] customCalls = parseCustomXmlToolCalls(choice.text);
+        ToolCall[] customCalls = parseCustomXMLToolCalls(choice.text);
         if (customCalls.length > 0)
         {
             choice.toolCalls = customCalls;
-            choice.text = stripXmlToolCalls(choice.text);
+            choice.text = stripXMLToolCalls(choice.text);
             return;
         }
 
-        ToolCall[] jsonCalls = parseJsonInXmlToolCalls(choice.text);
+        ToolCall[] jsonCalls = parseJSONInXMLToolCalls(choice.text);
         if (jsonCalls.length > 0)
         {
             choice.toolCalls = jsonCalls;
-            choice.text = stripXmlToolCalls(choice.text);
+            choice.text = stripXMLToolCalls(choice.text);
         }
     }
 
     /// Parses Qwen3-Coder custom XML tool calls from text.
-    static ToolCall[] parseCustomXmlToolCalls(string text)
+    static ToolCall[] parseCustomXMLToolCalls(string text)
     {
         ToolCall[] ret;
         if (!text.canFind("<function="))
@@ -197,7 +197,7 @@ private:
     }
 
     /// Parses JSON-in-XML tool calls (Hermes-style used by Qwen2.5/Qwen3).
-    static ToolCall[] parseJsonInXmlToolCalls(string text)
+    static ToolCall[] parseJSONInXMLToolCalls(string text)
     {
         ToolCall[] ret;
         // Match content between <tool_call> and </tool_call>
@@ -228,7 +228,7 @@ private:
     }
 
     /// Removes XML tool-call blocks from text, preserving any leading/trailing prose.
-    static string stripXmlToolCalls(string text)
+    static string stripXMLToolCalls(string text)
     {
         return text.replaceAll(ctRegex!(r"<tool_call>.*?</tool_call>", "s"), "")
             .replaceAll(ctRegex!(r"<tool_call>.*$", "s"), "")

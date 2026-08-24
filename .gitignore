@@ -1,7 +1,6 @@
 .dub
 docs.json
 __dummy.html
-docs/
 /intuit
 intuit.so
 intuit.dylib

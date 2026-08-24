@@ -65,7 +65,7 @@ private:
         case "end_turn":
             return FinishReason.EndTurn;
         case "max_tokens":
-            return FinishReason.Max_Tokens;
+            return FinishReason.MaxTokens;
         case "stop_sequence":
             return FinishReason.StopSequence;
         case "tool_use":
