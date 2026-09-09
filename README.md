@@ -1,5 +1,6 @@
 # Intuit
 
+[![DUB Package](https://img.shields.io/badge/dub-package-red)](https://code.dlang.org/packages/intuit)
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue)](LICENSE.txt)
 
 Intuit is a library for interacting with various AI endpoints/models, with a focus on local models. Intuit endpoints and models are highly extensible through interfaces.
