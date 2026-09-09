@@ -6,10 +6,10 @@ public import intuit.router.litellm;
 public import intuit.router.openrouter;
 
 import intuit.context;
+import intuit.json : toJSON;
 import intuit.model;
 import intuit.response;
 import intuit.tool;
-import conductor.serialize : toJSON;
 
 import std.json : JSONValue, JSONType;
 import std.traits : isArray, isIntegral;

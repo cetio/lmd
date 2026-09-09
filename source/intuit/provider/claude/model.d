@@ -5,7 +5,6 @@ import intuit.exception : EndpointException;
 import intuit.model;
 import intuit.response;
 import intuit.tool;
-import conductor.serialize : toJSON;
 
 import std.algorithm.searching : canFind;
 import std.conv : to;

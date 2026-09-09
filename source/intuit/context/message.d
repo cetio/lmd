@@ -1,8 +1,8 @@
 /// Typed conversation message objects shared across contexts and models.
 module intuit.context.message;
 
+import intuit.json : toJSON;
 import intuit.response;
-import conductor.serialize : toJSON;
 
 import std.json : JSONValue;
 

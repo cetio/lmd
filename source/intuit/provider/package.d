@@ -7,11 +7,10 @@ public import intuit.provider.qwen;
 
 import intuit.context;
 import intuit.exception : EndpointException;
+import intuit.json : toJSON;
 import intuit.model;
 import intuit.response;
 import intuit.tool;
-import conductor.http : Response, send;
-import conductor.serialize : toJSON;
 
 import std.conv : to;
 import std.json : JSONValue, JSONType, parseJSON;
@@ -75,7 +74,7 @@ interface IEndpoint
  * Throws:
  *  EndpointException on HTTP or JSON parse failures.
  */
-package (intuit) JSONValue request(
+package(intuit) JSONValue request(
     ref HTTP http,
     HTTP.Method method,
     string url,
@@ -85,24 +84,63 @@ package (intuit) JSONValue request(
 {
     MonoTime start = MonoTime.currTime;
 
-    Response response;
-    if (payload.type == JSONType.null_)
-        response = send(http, method, url, null, null, headers);
-    else
+    if (headers !is null)
     {
-        response = send(
-            http,
-            method,
-            url,
-            cast(const(ubyte)[])payload.toString(),
-            null,
-            headers
-        );
+        http.clearRequestHeaders();
+        foreach (string key, string value; headers)
+            http.addRequestHeader(key, value);
     }
 
-    string content = response.content is null ? null : response.content.assumeUTF().idup;
-    if (response.status < 200 || response.status >= 300)
-        throw new EndpointException(method.to!string, url, response.status, response.reason, content);
+    http.url = url;
+    http.method = method;
+
+    const(ubyte)[] body;
+    if (payload.type != JSONType.null_)
+        body = cast(const(ubyte)[])payload.toString();
+
+    if (method == HTTP.Method.post || method == HTTP.Method.put || method == HTTP.Method.patch)
+    {
+        size_t offset;
+        http.contentLength = body.length;
+        http.onSend = delegate size_t(void[] buffer) {
+            if (offset >= body.length)
+                return 0;
+
+            size_t count = body.length - offset;
+            if (count > buffer.length)
+                count = buffer.length;
+
+            buffer[0..count] = cast(void[])body[offset..offset + count];
+            offset += count;
+            return count;
+        };
+    }
+    else if (method == HTTP.Method.del)
+    {
+        http.onSend = delegate size_t(void[] buffer) {
+            return 0;
+        };
+    }
+    else
+        http.onSend = null;
+
+    ushort status;
+    string reason;
+    ubyte[] responseBody;
+    http.onReceiveStatusLine = delegate void(HTTP.StatusLine line) {
+        status = line.code;
+        reason = line.reason.idup;
+    };
+    http.onReceive = delegate size_t(ubyte[] chunk) {
+        if (chunk !is null)
+            responseBody ~= chunk;
+        return chunk.length;
+    };
+    http.perform();
+
+    string content = responseBody is null ? null : responseBody.assumeUTF().idup;
+    if (status < 200 || status >= 300)
+        throw new EndpointException(method.to!string, url, status, reason, content);
 
     JSONValue ret;
     try
@@ -112,8 +150,8 @@ package (intuit) JSONValue request(
         throw new EndpointException(
             method.to!string,
             url,
-            response.status,
-            response.reason,
+            status,
+            reason,
             content,
             "Endpoint returned invalid JSON.",
         );

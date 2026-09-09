@@ -1,8 +1,8 @@
 /// Tool definition, schema generation, and registration.
 module intuit.tool;
 
-import conductor.serialize : toJSON;
-import conductor.serialize.json : fromJSON;
+import intuit.json : fromJSON, toJSON;
+
 import std.conv : to;
 import std.json : JSONValue, JSONType;
 import std.traits : Parameters, ParameterIdentifierTuple, ReturnType;

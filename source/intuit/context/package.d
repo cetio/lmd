@@ -5,7 +5,7 @@ public import intuit.context.message;
 public import intuit.context.compactor;
 public import intuit.context.guardrails;
 
-import conductor.serialize : toJSON;
+import intuit.json : toJSON;
 import intuit.response;
 import std.json : JSONValue;
 
