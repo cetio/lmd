@@ -16,3 +16,5 @@ intuit-test-*
 libintuit*
 bin/*
 playground/*
+!bin/.gitkeep
+!playground/.gitkeep
