@@ -323,6 +323,8 @@ private:
 
         if ("reasoning" in message && !message["reasoning"].isNull)
             parseContent(message["reasoning"], choice.text, choice.reasoning, true);
+        if ("reasoning_content" in message && !message["reasoning_content"].isNull)
+            parseContent(message["reasoning_content"], choice.text, choice.reasoning, true);
 
         if ("tool_calls" in message && message["tool_calls"].type == JSONType.array)
         {

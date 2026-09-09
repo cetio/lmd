@@ -42,6 +42,28 @@ unittest
     completion.usage.cacheMisses.should == 12;
 }
 
+@Name("ModelConfig parses Gemma reasoning_content")
+unittest
+{
+    ModelConfig cfg = new ModelConfig("google/gemma-4-e4b");
+
+    JSONValue json = JSONValue.emptyObject;
+    JSONValue choices = JSONValue.emptyArray;
+    JSONValue choice = JSONValue.emptyObject;
+    JSONValue message = JSONValue.emptyObject;
+    message["content"] = JSONValue("The answer.");
+    message["reasoning_content"] = JSONValue("First inspect the clues. Then answer.");
+    choice["message"] = message;
+    choice["finish_reason"] = JSONValue("stop");
+    choices.array ~= choice;
+    json["choices"] = choices;
+
+    Completion completion = cfg.parseResponse(json);
+
+    completion.text.should == "The answer.";
+    completion.reasoning.should == "First inspect the clues. Then answer.";
+}
+
 @Name("ModelConfig parseResponse derives total and cache miss")
 unittest
 {
