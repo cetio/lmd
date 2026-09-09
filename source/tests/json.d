@@ -19,14 +19,14 @@ struct Metadata
 
 struct Payload
 {
-    @Required @intuit.json.Name("display_name") string name;
+    @JSONRequired @JSONName("display_name") string name;
     long[] values;
     Metadata[string] metadata;
     Nullable!double score;
     Flavor flavor;
 }
 
-@unit_threaded.Name("JSON serialization supports aggregates and containers")
+@Name("JSON serialization supports aggregates and containers")
 unittest
 {
     Payload payload;
@@ -52,13 +52,13 @@ unittest
     recovered.flavor.should == payload.flavor;
 }
 
-@unit_threaded.Name("JSON deserialization enforces required fields") @ShouldFail
+@Name("JSON deserialization enforces required fields") @ShouldFail
 unittest
 {
     fromJSON!Payload(JSONValue.emptyObject);
 }
 
-@unit_threaded.Name("JSON serialization handles null values")
+@Name("JSON serialization handles null values")
 unittest
 {
     (cast(string)null).toJSON().type.should == JSONType.null_;

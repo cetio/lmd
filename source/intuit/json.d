@@ -5,12 +5,12 @@ import std.json : JSONType, JSONValue;
 import std.traits;
 import std.typecons : Nullable;
 
-struct Name
+struct JSONName
 {
     string value;
 }
 
-struct Required { }
+struct JSONRequired { }
 
 JSONValue toJSON(T)(T value)
 {
@@ -268,7 +268,7 @@ private:
 template JsonFieldName(T, string FIELD)
 {
     enum JsonFieldName = () {
-        alias ATTRS = getUDAs!(__traits(getMember, T, FIELD), Name);
+        alias ATTRS = getUDAs!(__traits(getMember, T, FIELD), JSONName);
         static if (ATTRS.length > 0)
             return ATTRS[0].value;
         else
@@ -278,5 +278,5 @@ template JsonFieldName(T, string FIELD)
 
 template IsRequiredField(T, string FIELD)
 {
-    enum IsRequiredField = hasUDA!(__traits(getMember, T, FIELD), Required);
+    enum IsRequiredField = hasUDA!(__traits(getMember, T, FIELD), JSONRequired);
 }
