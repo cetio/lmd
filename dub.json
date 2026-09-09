@@ -29,7 +29,7 @@
 			"mainSourceFile": "bin/ut.d",
 			"name": "unittest",
 			"preBuildCommands": [
-				"$DUB run --compiler=$$DC unit-threaded -c gen_ut_main -- -f bin/ut.d"
+				"$DUB run unit-threaded -c gen_ut_main -- -f bin/ut.d"
 			],
 			"targetType": "executable"
 		},
@@ -43,7 +43,7 @@
 			"mainSourceFile": "bin/ut.d",
 			"name": "integration",
 			"preBuildCommands": [
-				"$DUB run --compiler=$$DC unit-threaded -c gen_ut_main -- -f bin/ut.d"
+				"$DUB run unit-threaded -c gen_ut_main -- -f bin/ut.d"
 			],
 			"targetType": "executable",
 			"versions": [
