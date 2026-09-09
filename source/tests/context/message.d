@@ -3,7 +3,7 @@ module tests.context.message;
 import intuit.context.message;
 import intuit.response;
 import unit_threaded;
-import std.json : JSONValue, JSONType;
+import std.json : JSONValue, JSONType, parseJSON;
 
 @Name("SystemMessage toJSON produces correct object")
 unittest
@@ -101,6 +101,37 @@ unittest
     json["role"].str.should == "tool";
     json["tool_call_id"].str.should == "call_01";
     json["content"].str.should == "Sunny";
+}
+
+@Name("ToolMessage serializes JSON array content as a string")
+unittest
+{
+    JSONValue content = JSONValue.emptyArray;
+    content.array ~= JSONValue("first");
+    content.array ~= JSONValue(2);
+    ToolMessage message = new ToolMessage("call_array", content);
+
+    JSONValue json = message.toJSON();
+    json["content"].type.should == JSONType.string;
+    JSONValue parsed = parseJSON(json["content"].str);
+    parsed.type.should == JSONType.array;
+    parsed.array[0].str.should == "first";
+    parsed.array[1].integer.should == 2;
+}
+
+@Name("ToolMessage serializes JSON object content as a string")
+unittest
+{
+    JSONValue content = JSONValue.emptyObject;
+    content["status"] = JSONValue("ok");
+    content["count"] = JSONValue(2);
+    ToolMessage message = new ToolMessage("call_object", content);
+
+    JSONValue json = message.toJSON();
+    json["content"].type.should == JSONType.string;
+    JSONValue parsed = parseJSON(json["content"].str);
+    parsed["status"].str.should == "ok";
+    parsed["count"].integer.should == 2;
 }
 
 @Name("ToolMessage toJSON without tool call id omits field")

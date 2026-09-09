@@ -4,7 +4,7 @@ module intuit.context.message;
 import intuit.json : toJSON;
 import intuit.response;
 
-import std.json : JSONValue;
+import std.json : JSONType, JSONValue;
 
 /// Represents the role of a message in a conversation.
 enum Role : string
@@ -222,7 +222,9 @@ class ToolMessage : IMessage
         ret["role"] = JSONValue(Role.Tool);
         if (_toolCallId.length > 0)
             ret["tool_call_id"] = JSONValue(_toolCallId);
-        ret["content"] = _content;
+        ret["content"] = _content.type == JSONType.string
+            ? _content
+            : JSONValue(_content.toString());
         return ret;
     }
 }

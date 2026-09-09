@@ -42,6 +42,29 @@ unittest
     completion.usage.cacheMisses.should == 12;
 }
 
+@Name("ModelConfig normalizes shorthand response schema nodes")
+unittest
+{
+    ModelConfig cfg = new ModelConfig("gpt-4");
+    JSONValue schema = JSONValue.emptyObject;
+    schema["type"] = JSONValue("object");
+    schema["properties"] = JSONValue.emptyObject;
+    schema["properties"]["answer"] = JSONValue("string");
+    schema["properties"]["tags"] = JSONValue.emptyObject;
+    schema["properties"]["tags"]["type"] = JSONValue("array");
+    schema["properties"]["tags"]["items"] = JSONValue("string");
+    schema["properties"]["status"] = JSONValue.emptyObject;
+    schema["properties"]["status"]["type"] = JSONValue("string");
+    schema["properties"]["status"]["enum"] = JSONValue([JSONValue("draft"), JSONValue("published")]);
+
+    cfg.setResponseSchema("answer_schema", schema);
+    JSONValue normalized = cfg.responseSchema["json_schema"]["schema"];
+
+    normalized["properties"]["answer"]["type"].str.should == "string";
+    normalized["properties"]["tags"]["items"]["type"].str.should == "string";
+    normalized["properties"]["status"]["enum"][0].str.should == "draft";
+}
+
 @Name("ModelConfig parses Gemma reasoning_content")
 unittest
 {

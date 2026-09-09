@@ -100,7 +100,7 @@ class ModelConfig
 
         JSONValue spec = JSONValue.emptyObject;
         spec["name"] = JSONValue(name);
-        spec["schema"] = schema;
+        spec["schema"] = normalizeSchema(schema);
         spec["strict"] = JSONValue(strict);
         json["json_schema"] = spec;
         responseSchema = json;
@@ -309,6 +309,95 @@ class ModelConfig
     }
 
 private:
+    static JSONValue normalizeSchema(JSONValue schema)
+    {
+        if (schema.type == JSONType.string && isSchemaType(schema.str))
+        {
+            JSONValue ret = JSONValue.emptyObject;
+            ret["type"] = schema;
+            return ret;
+        }
+
+        if (schema.type != JSONType.object)
+            return schema;
+
+        JSONValue ret = schema;
+        foreach (keyword; [
+            "properties",
+            "patternProperties",
+            "dependentSchemas",
+            "$defs",
+            "definitions",
+        ])
+        {
+            if (keyword in ret && ret[keyword].type == JSONType.object)
+                ret[keyword] = normalizeSchemaMap(ret[keyword]);
+        }
+
+        foreach (keyword; [
+            "items",
+            "contains",
+            "additionalProperties",
+            "propertyNames",
+            "unevaluatedItems",
+            "unevaluatedProperties",
+            "not",
+            "if",
+            "then",
+            "else",
+        ])
+        {
+            if (keyword in ret)
+                ret[keyword] = normalizeSchema(ret[keyword]);
+        }
+
+        foreach (keyword; [
+            "allOf",
+            "anyOf",
+            "oneOf",
+            "prefixItems",
+        ])
+        {
+            if (keyword in ret && ret[keyword].type == JSONType.array)
+                ret[keyword] = normalizeSchemaArray(ret[keyword]);
+        }
+
+        return ret;
+    }
+
+    static JSONValue normalizeSchemaMap(JSONValue schemas)
+    {
+        JSONValue ret = schemas;
+        foreach (string key, JSONValue schema; schemas.object)
+            ret[key] = normalizeSchema(schema);
+        return ret;
+    }
+
+    static JSONValue normalizeSchemaArray(JSONValue schemas)
+    {
+        JSONValue ret = JSONValue.emptyArray;
+        foreach (schema; schemas.array)
+            ret.array ~= normalizeSchema(schema);
+        return ret;
+    }
+
+    static bool isSchemaType(string value)
+    {
+        switch (value)
+        {
+        case "null":
+        case "boolean":
+        case "object":
+        case "array":
+        case "number":
+        case "integer":
+        case "string":
+            return true;
+        default:
+            return false;
+        }
+    }
+
     /// Extracts text, reasoning, and tool calls from a message JSON object.
     static void parseMessage(ref Choice choice, JSONValue message)
     {

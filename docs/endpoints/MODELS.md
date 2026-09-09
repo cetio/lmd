@@ -79,7 +79,9 @@ schema["required"] = JSONValue([JSONValue("answer")]);
 cfg.setResponseSchema("answer_schema", schema);
 ```
 
-The model and endpoint must support this response-format shape. Intuit sends the schema but does not validate the returned value against it. Parse the first choice as JSON with `completion.json`.
+The model and endpoint must support this response-format shape. Intuit sends the schema but does not validate the returned value against it.
+
+Primitive shorthand nodes such as `JSONValue("string")` in schema positions are normalized to `{ "type": "string" }` before the request is sent. Strings in `enum`, `required`, descriptions, and other metadata are preserved.
 
 ## Tool Choice
 
