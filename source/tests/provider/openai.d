@@ -64,6 +64,29 @@ unittest
     completion.reasoning.should == "First inspect the clues. Then answer.";
 }
 
+@Name("ModelConfig exposes truncated Gemma reasoning outside raw JSON")
+unittest
+{
+    ModelConfig cfg = new ModelConfig("google/gemma-4-e4b");
+
+    JSONValue json = JSONValue.emptyObject;
+    JSONValue choices = JSONValue.emptyArray;
+    JSONValue choice = JSONValue.emptyObject;
+    JSONValue message = JSONValue.emptyObject;
+    message["content"] = JSONValue("");
+    message["reasoning_content"] = JSONValue("The response needs more tokens to finish.");
+    choice["message"] = message;
+    choice["finish_reason"] = JSONValue("length");
+    choices.array ~= choice;
+    json["choices"] = choices;
+
+    Completion completion = cfg.parseResponse(json);
+
+    completion.text.should == "";
+    completion.reasoning.should == "The response needs more tokens to finish.";
+    completion.choice.finishReason.should == FinishReason.Length;
+}
+
 @Name("ModelConfig parseResponse derives total and cache miss")
 unittest
 {
