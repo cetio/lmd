@@ -2,6 +2,6 @@
 	"fileVersion": 1,
 	"versions": {
 		"conductor": "2.1.2",
-		"unit-threaded": "2.2.4"
+		"unit-threaded": "2.2.5"
 	}
 }

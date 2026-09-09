@@ -1,6 +1,6 @@
 # Intuit
 
-[![License](https://img.shields.io/badge/License-AGPL--3-blue)](LICENSE.txt)
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue)](LICENSE.txt)
 
 Intuit is a library for interacting with various AI endpoints/models, with a focus on local models. Intuit endpoints and models are highly extensible through interfaces.
 
@@ -204,4 +204,4 @@ Usage usage = result.usage;         // token accounting
 
 ## License
 
-Intuit is licensed under [AGPL-3.0](LICENSE.txt).
+Intuit is licensed under [Apache-2.0](LICENSE.txt).
